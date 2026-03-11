@@ -1,0 +1,183 @@
+/**
+ * TopBar — Barra superior com logo, navegação, filtros e ações
+ */
+import { useNetwork, ROLE_LABELS, type MemberRole } from "@/contexts/NetworkContext";
+import { useSchedule } from "@/contexts/ScheduleContext";
+import { useProjectCards } from "@/contexts/ProjectCardsContext";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Filter, Download, Upload, MoreVertical } from "lucide-react";
+import { toast } from "sonner";
+import { useLocation, Link } from "wouter";
+
+interface TopBarProps {
+  filterRole?: MemberRole | "all";
+  onFilterChange?: (role: MemberRole | "all") => void;
+}
+
+export default function TopBar({ filterRole, onFilterChange }: TopBarProps) {
+  const { state: networkState, setState: setNetworkState } = useNetwork();
+  const { state: scheduleState, setState: setScheduleState } = useSchedule();
+  const { state: cardsState, setState: setCardsState } = useProjectCards();
+  const [location] = useLocation();
+
+  const handleExport = () => {
+    const fullData = {
+      network: networkState,
+      schedule: scheduleState,
+      cards: cardsState,
+    };
+    const data = JSON.stringify(fullData, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const today = new Date().toISOString().split("T")[0];
+    a.download = `pub-network-data-${today}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Dados exportados com sucesso");
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          // Support new format (with network/schedule/cards keys)
+          if (data.network && data.network.members) {
+            setNetworkState(data.network);
+            if (data.schedule) setScheduleState(data.schedule);
+            if (data.cards) setCardsState(data.cards);
+            toast.success("Dados importados com sucesso");
+          // Support legacy format (flat members/projects/assignments)
+          } else if (data.members && data.projects && data.assignments) {
+            setNetworkState(data);
+            toast.success("Dados importados (formato legado)");
+          } else {
+            toast.error("Formato de arquivo inválido");
+          }
+        } catch {
+          toast.error("Erro ao ler o arquivo");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+
+  const navItems = [
+    { label: "Configurações", href: "/configuracoes" },
+    { label: "Painel", href: "/" },
+  ];
+
+  return (
+    <div className="h-14 border-b border-border bg-card/60 backdrop-blur-md flex items-center px-3 sm:px-4 gap-2 sm:gap-4 shrink-0">
+      {/* Logo */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
+          <span className="text-[10px] font-extrabold text-[#0f1729] font-heading tracking-wider">
+            PUB
+          </span>
+        </div>
+        <div className="hidden sm:block">
+          <h1 className="text-sm font-bold font-heading tracking-wide leading-tight">
+            Network Monitor
+          </h1>
+          <p className="text-[10px] text-muted-foreground leading-tight">
+            Equipe & Projetos
+          </p>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex items-center gap-1 ml-4">
+        {navItems.map((item) => {
+          const isActive = location === item.href;
+          return (
+            <Link key={item.href} href={item.href}>
+              <span
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${
+                  isActive
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                }`}
+              >
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
+      </nav>
+
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Filter — only on Painel */}
+      {filterRole !== undefined && onFilterChange && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5 shrink-0">
+              <Filter className="w-3 h-3" />
+              <span className="hidden sm:inline">
+                {filterRole === "all" ? "Todos" : ROLE_LABELS[filterRole]}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onFilterChange("all")}>
+              Todos
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => onFilterChange("creative")}>
+              <div className="w-2 h-2 rounded-full bg-red-500 mr-2" />
+              Criativos
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFilterChange("architect")}>
+              <div className="w-2 h-2 rounded-full bg-green-500 mr-2" />
+              Arquitetos
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onFilterChange("3d")}>
+              <div className="w-2 h-2 rounded-full bg-violet-500 mr-2" />
+              3D
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      {/* Actions */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="text-xs shrink-0">
+            <MoreVertical className="w-3 h-3 sm:hidden" />
+            <span className="hidden sm:inline">Ações</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleExport}>
+            <Download className="w-3 h-3 mr-2" />
+            Exportar JSON
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleImport}>
+            <Upload className="w-3 h-3 mr-2" />
+            Importar JSON
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}

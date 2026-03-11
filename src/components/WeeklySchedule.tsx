@@ -1,0 +1,782 @@
+/**
+ * WeeklySchedule — Grid de agenda semanal
+ * Linhas: membros da equipe + linhas especiais (freelancers, entradas/entregas)
+ * Colunas: dias da semana (seg-sex) com navegação
+ */
+import { useState, useMemo, useRef } from "react";
+import { useProjectCards } from "@/contexts/ProjectCardsContext";
+import { useNetwork, ROLE_COLORS, type MemberRole } from "@/contexts/NetworkContext";
+import {
+  useSchedule,
+  ACTIVITY_TYPES,
+  type ActivityType,
+  type ScheduleEntry,
+} from "@/contexts/ScheduleContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  X,
+  Search,
+  Trash2,
+  Calendar as CalendarIcon,
+} from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+// ─── Date helpers ────────────────────────────────────────────────
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function addDays(d: Date, days: number): Date {
+  const result = new Date(d);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function formatDate(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function formatDayHeader(d: Date): { day: string; weekday: string } {
+  const day = String(d.getDate()).padStart(2, "0");
+  const weekdays = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  return { day, weekday: weekdays[d.getDay()] };
+}
+
+function formatWeekRange(monday: Date): string {
+  const friday = addDays(monday, 4);
+  const months = [
+    "jan", "fev", "mar", "abr", "mai", "jun",
+    "jul", "ago", "set", "out", "nov", "dez",
+  ];
+  const d1 = String(monday.getDate()).padStart(2, "0");
+  const d2 = String(friday.getDate()).padStart(2, "0");
+  const m = months[monday.getMonth()];
+  const y = monday.getFullYear();
+  return `${d1} – ${d2} ${m} ${y}`;
+}
+
+// ─── Activity Picker ─────────────────────────────────────────────
+function ActivityPicker({
+  onSelect,
+  onClose,
+  activities,
+}: {
+  onSelect: (activity: ActivityType) => void;
+  onClose: () => void;
+  activities?: ActivityType[];
+}) {
+  const items = activities || ACTIVITY_TYPES;
+  return (
+    <div className="w-56">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <span className="text-xs font-semibold font-heading text-muted-foreground uppercase tracking-wider">
+          Atividade
+        </span>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <ScrollArea className="max-h-[320px]">
+        <div className="p-1.5 space-y-0.5">
+          {items.map((act) => (
+            <button
+              key={act.id}
+              onClick={() => onSelect(act)}
+              className="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all hover:scale-[1.02] hover:shadow-md"
+              style={{
+                backgroundColor: act.color,
+                color: act.textColor,
+              }}
+            >
+              {act.label}
+            </button>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+// ─── Project Picker ──────────────────────────────────────────────
+function ProjectPicker({
+  onSelect,
+  onBack,
+  activityLabel,
+}: {
+  onSelect: (projectId: string) => void;
+  onBack: () => void;
+  activityLabel: string;
+}) {
+  const { state: cardsState } = useProjectCards();
+  const [search, setSearch] = useState("");
+  const activeCards = cardsState.cards.filter((c) => c.active !== false);
+  const filtered = search
+    ? activeCards.filter((c) =>
+      c.name.toLowerCase().includes(search.toLowerCase())
+    )
+    : activeCards;
+
+  return (
+    <div className="w-56">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <button
+          onClick={onBack}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+        >
+          <ChevronLeft className="w-3 h-3" />
+          Voltar
+        </button>
+        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+          {activityLabel}
+        </span>
+      </div>
+      <div className="px-2 py-1.5 border-b border-border">
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-secondary/50">
+          <Search className="w-3 h-3 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Buscar projeto..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="bg-transparent text-xs outline-none flex-1 text-foreground placeholder:text-muted-foreground"
+            autoFocus
+          />
+        </div>
+      </div>
+      <ScrollArea className="max-h-[260px]">
+        <div className="p-1.5 space-y-0.5">
+          {/* Option without project */}
+          <button
+            onClick={() => onSelect("")}
+            className="w-full text-left px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-accent/50 transition-colors"
+          >
+            Sem projeto
+          </button>
+          {filtered.map((proj) => (
+            <button
+              key={proj.id}
+              onClick={() => onSelect(proj.id)}
+              className="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-accent/50 transition-colors text-foreground"
+            >
+              {proj.name}
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <p className="text-xs text-muted-foreground px-2.5 py-2">
+              Nenhum projeto encontrado
+            </p>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+// ─── Special activities for Entradas e Entregas row ──────────────
+const ENTRADAS_ACTIVITIES: ActivityType[] = [
+  { id: "briefing", label: "BRIEFING", color: "#1a237e", textColor: "#fff" },
+  { id: "entrega-pub", label: "ENTREGA PUB", color: "#263238", textColor: "#fff" },
+  { id: "apresentacao-cliente", label: "APRESENTAÇÃO CLIENTE", color: "#f9a825", textColor: "#000" },
+];
+
+function TaskBar({
+  entry,
+  act,
+  proj,
+  removeEntry,
+  updateEntry,
+}: {
+  entry: ScheduleEntry;
+  act: ActivityType;
+  proj: any;
+  removeEntry: (id: string) => void;
+  updateEntry: (id: string, updates: Partial<ScheduleEntry>) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  const startDrag = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsDragging(true);
+
+    const startX = e.clientX;
+    const startDuration = entry.duration || 1;
+    const parent = barRef.current?.closest('td');
+    const colWidth = parent ? parent.getBoundingClientRect().width : 140;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      let newDuration = startDuration + (deltaX / colWidth);
+      newDuration = Math.round(newDuration * 2) / 2; // snap to 0.5
+      newDuration = Math.max(0.5, newDuration);
+      setDragWidth(newDuration);
+    };
+
+    const onMouseUp = (upEvent: MouseEvent) => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setIsDragging(false);
+
+      const deltaX = upEvent.clientX - startX;
+      let newDuration = startDuration + (deltaX / colWidth);
+      newDuration = Math.round(newDuration * 2) / 2;
+      newDuration = Math.max(0.5, newDuration);
+
+      updateEntry(entry.id, { duration: newDuration });
+      setDragWidth(null);
+      setDragWidth(null);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.stopPropagation();
+    e.dataTransfer.setData("application/json", JSON.stringify({
+      entryId: entry.id,
+      sourceMemberId: entry.memberId,
+      sourceDate: entry.date,
+      sourceSlot: entry.slotIndex || 0,
+      sourceOffset: entry.startOffset || 0
+    }));
+    e.dataTransfer.effectAllowed = "move";
+
+    // Create a drag image
+    const dragIcon = document.createElement('div');
+    dragIcon.style.width = '100px';
+    dragIcon.style.height = '20px';
+    dragIcon.style.backgroundColor = act.color;
+    dragIcon.style.borderRadius = '4px';
+    dragIcon.style.position = 'absolute';
+    dragIcon.style.top = '-1000px';
+    document.body.appendChild(dragIcon);
+    e.dataTransfer.setDragImage(dragIcon, 50, 10);
+    setTimeout(() => document.body.removeChild(dragIcon), 0);
+  };
+
+  const duration = dragWidth !== null ? dragWidth : (entry.duration || 1);
+  const slotIndex = entry.slotIndex || 0;
+  const startOffset = entry.startOffset || 0;
+  const paddingCompensation = Math.max(0, Math.ceil(duration - 1)) * 1;
+
+  return (
+    <div
+      ref={barRef}
+      draggable
+      onDragStart={handleDragStart}
+      className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm ${isDragging ? "z-50 ring-2 ring-primary" : "z-10"} cursor-grab active:cursor-grabbing hover:-translate-y-[1px] transition-transform`}
+      style={{
+        backgroundColor: act.color,
+        color: act.textColor,
+        top: `${slotIndex * 22 + 2}px`,
+        left: startOffset === 0 ? '2px' : `calc(${startOffset * 100}% + 2px)`,
+        width: `calc(${duration * 100}% - 4px + ${paddingCompensation}px)`,
+        height: '20px',
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
+    >
+      <div className="flex-1 truncate text-center px-1.5 pointer-events-none select-none">
+        {proj ? proj.name : act.label}
+      </div>
+
+      <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            removeEntry(entry.id);
+          }}
+          className="hover:bg-black/20 text-white rounded p-0.5 mr-1"
+        >
+          <X className="w-2.5 h-2.5" />
+        </button>
+
+        <div
+          className="w-2.5 h-full cursor-col-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
+          onMouseDown={startDrag}
+        >
+          <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cell content ────────────────────────────────────────────────
+function ScheduleCell({
+  memberId,
+  date,
+  isEntradaEntrega = false,
+}: {
+  memberId: string;
+  date: string;
+  isEntradaEntrega?: boolean;
+}) {
+  const { getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
+  const { state: cardsState } = useProjectCards();
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<"activity" | "project">("activity");
+  const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
+
+  const entries = getEntriesForCell(memberId, date);
+
+  const handleActivitySelect = (activity: ActivityType) => {
+    setSelectedActivity(activity);
+    setStep("project");
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const dataStr = e.dataTransfer.getData("application/json");
+      if (!dataStr) return;
+
+      const data = JSON.parse(dataStr);
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const colWidth = rect.width;
+      let targetOffset = 0;
+      if (x > colWidth * 0.5) {
+        targetOffset = 0.5;
+      }
+
+      const y = e.clientY - rect.top;
+      // calculate approximate row (each is ~22px height)
+      let targetSlot = Math.floor(y / 22);
+      if (targetSlot < 0) targetSlot = 0;
+      if (targetSlot > 2) targetSlot = 2; // Up to 3 slots
+
+      if (data.entryId && (data.sourceMemberId !== memberId || data.sourceDate !== date || data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset)) {
+        updateEntry(data.entryId, {
+          memberId: memberId,
+          date: date,
+          slotIndex: targetSlot,
+          startOffset: targetOffset
+        });
+      }
+    } catch (err) {
+      console.error("Failed to parse drop target", err);
+    }
+  };
+
+  const handleProjectSelect = (projectId: string) => {
+    if (selectedActivity) {
+      addEntry(memberId, date, selectedActivity.id, projectId || undefined);
+    }
+    setOpen(false);
+    setStep("activity");
+    setSelectedActivity(null);
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setStep("activity");
+    setSelectedActivity(null);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(o) => {
+      setOpen(o);
+      if (!o) {
+        setStep("activity");
+        setSelectedActivity(null);
+      }
+    }}>
+      <PopoverTrigger asChild>
+        <div
+          className="h-[68px] relative cursor-pointer hover:bg-black/5 rounded-sm"
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          {entries.map((entry) => {
+            const allActs = isEntradaEntrega ? ENTRADAS_ACTIVITIES : ACTIVITY_TYPES;
+            const act = allActs.find((a) => a.id === entry.activityId) || ACTIVITY_TYPES.find((a) => a.id === entry.activityId);
+            const proj = entry.projectId
+              ? cardsState.cards.find((c) => c.id === entry.projectId)
+              : null;
+            if (!act) return null;
+            return (
+              <TaskBar
+                key={entry.id}
+                entry={entry}
+                act={act}
+                proj={proj}
+                removeEntry={removeEntry}
+                updateEntry={updateEntry}
+              />
+            );
+          })}
+        </div>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        className="p-0 w-auto"
+        sideOffset={4}
+      >
+        {step === "activity" ? (
+          <ActivityPicker
+            onSelect={handleActivitySelect}
+            onClose={handleClose}
+            activities={isEntradaEntrega ? ENTRADAS_ACTIVITIES : undefined}
+          />
+        ) : (
+          <ProjectPicker
+            onSelect={handleProjectSelect}
+            onBack={() => setStep("activity")}
+            activityLabel={selectedActivity?.label || ""}
+          />
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Color Picker ────────────────────────────────────────────────
+const PRESET_COLORS = [
+  "#dc2626", "#16a34a", "#2563eb", "#7c3aed", "#f59e0b",
+  "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16",
+];
+
+// ─── Edit Member Popover ─────────────────────────────────────────
+function EditMemberPopover({
+  member,
+  children,
+}: {
+  member: { id: string; name: string; color: string; type: string };
+  children: React.ReactNode;
+}) {
+  const { updateMember, removeMember } = useNetwork();
+  const [name, setName] = useState(member.name);
+  const [color, setColor] = useState(member.color);
+  const [open, setOpen] = useState(false);
+
+  if (member.type !== "member") return <>{children}</>;
+
+  const handleSave = () => {
+    if (name.trim()) {
+      updateMember(member.id, { name: name.trim(), color });
+    }
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(o) => {
+      setOpen(o);
+      if (o) { setName(member.name); setColor(member.color); }
+    }}>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent className="w-52 p-3 space-y-3" side="right" align="start">
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">Nome</label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-7 text-xs"
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">Cor</label>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                style={{
+                  backgroundColor: c,
+                  borderColor: color === c ? "white" : "transparent",
+                  transform: color === c ? "scale(1.15)" : undefined,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" className="flex-1 h-7 text-xs" onClick={handleSave}>
+            Salvar
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 w-7 p-0"
+            onClick={() => { removeMember(member.id); setOpen(false); }}
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Add Member Popover ──────────────────────────────────────────
+function AddMemberPopover() {
+  const { addMember } = useNetwork();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<MemberRole>("creative");
+  const [color, setColor] = useState(ROLE_COLORS.creative);
+
+  const handleAdd = () => {
+    if (!name.trim()) return;
+    addMember(name.trim(), role, color);
+    setName("");
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(o) => {
+      setOpen(o);
+      if (o) { setName(""); setRole("creative"); setColor(ROLE_COLORS.creative); }
+    }}>
+      <PopoverTrigger asChild>
+        <button className="text-muted-foreground hover:text-foreground transition-colors">
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-3 space-y-3" side="right" align="start">
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">Nome</label>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-7 text-xs"
+            placeholder="Nome do membro"
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            autoFocus
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">Função</label>
+          <Select value={role} onValueChange={(v) => {
+            const r = v as MemberRole;
+            setRole(r);
+            setColor(ROLE_COLORS[r]);
+          }}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="creative">Criativo</SelectItem>
+              <SelectItem value="architect">Arquiteto</SelectItem>
+              <SelectItem value="3d">3D</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">Cor</label>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className="w-5 h-5 rounded-full border-2 transition-transform hover:scale-110"
+                style={{
+                  backgroundColor: c,
+                  borderColor: color === c ? "white" : "transparent",
+                  transform: color === c ? "scale(1.15)" : undefined,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        <Button size="sm" className="w-full h-7 text-xs" onClick={handleAdd} disabled={!name.trim()}>
+          Adicionar
+        </Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export default function WeeklySchedule() {
+  const { state: networkState } = useNetwork();
+  const { state: scheduleState } = useSchedule();
+  const { state: cardsState } = useProjectCards();
+  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+
+  // Active projects allocations summary
+  const activeProjectSummaries = useMemo(() => {
+    const summaries = new Map<string, number>();
+
+    // Only active project cards
+    const activeCards = cardsState.cards.filter(c => c.active !== false);
+    const activeCardIds = new Set(activeCards.map(c => c.id));
+
+    // Sum all durations from all times and members
+    scheduleState.entries.forEach(entry => {
+      if (entry.projectId && activeCardIds.has(entry.projectId)) {
+        const dur = entry.duration || 1;
+        summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + dur);
+      }
+    });
+
+    const result: string[] = [];
+    summaries.forEach((dur, pId) => {
+      const card = activeCards.find(c => c.id === pId);
+      if (card) {
+        result.push(`${card.name}: ${dur}`);
+      }
+    });
+
+    return result.sort().join("   |   ");
+  }, [scheduleState.entries, cardsState.cards]);
+
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
+  }, [currentMonday]);
+
+  const goToPrevWeek = () => setCurrentMonday((m) => addDays(m, -7));
+  const goToNextWeek = () => setCurrentMonday((m) => addDays(m, 7));
+  const goToToday = () => setCurrentMonday(getMonday(new Date()));
+
+  const today = formatDate(new Date());
+
+  // All rows: team members + special rows
+  const rows = useMemo(() => {
+    const memberRows = networkState.members.map((m) => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      type: "member" as const,
+    }));
+    const specialRows = scheduleState.specialRows
+      .filter((r) => r.type !== "freelancer")
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        color: "#6366f1",
+        type: r.type as "entradas-entregas",
+      }));
+    return [...memberRows, ...specialRows];
+  }, [networkState.members, scheduleState.specialRows]);
+
+  return (
+    <div className="border border-border rounded-lg bg-card/40 backdrop-blur-sm overflow-hidden">
+      {/* Week navigation header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card/60">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button variant="ghost" size="icon-sm" onClick={goToPrevWeek}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" onClick={goToNextWeek}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <span className="text-sm font-semibold font-heading ml-1">
+            {formatWeekRange(currentMonday)}
+          </span>
+        </div>
+
+        {/* Project summaries inline */}
+        <div className="flex-1 overflow-hidden px-6">
+          <p className="text-[11px] font-medium text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis w-full">
+            {activeProjectSummaries}
+          </p>
+        </div>
+
+        <Button variant="outline" size="sm" className="text-xs flex-shrink-0" onClick={goToToday}>
+          <CalendarIcon className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
+      {/* Grid */}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse min-w-[700px]">
+          <thead>
+            <tr>
+              <th className="w-[120px] text-left px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-card/40 sticky left-0 z-10">
+                <AddMemberPopover />
+              </th>
+              {weekDays.map((day) => {
+                const { day: dayNum, weekday } = formatDayHeader(day);
+                const isToday = formatDate(day) === today;
+                return (
+                  <th
+                    key={formatDate(day)}
+                    className={`text-center px-2 py-2 border-b border-l border-border min-w-[140px] ${isToday ? "bg-primary/10" : "bg-card/40"
+                      }`}
+                  >
+                    <div className={`text-lg font-bold font-heading ${isToday ? "text-primary" : "text-foreground"}`}>
+                      {dayNum}
+                    </div>
+                    <div className={`text-[10px] ${isToday ? "text-primary/70" : "text-muted-foreground"}`}>
+                      {weekday}
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const isEntrada = row.type === "entradas-entregas";
+              return (
+                <tr key={row.id} className={`group/row hover:bg-accent/10 transition-colors ${isEntrada ? "min-h-[64px]" : ""}`}>
+                  <td className={`px-3 border-b border-border bg-card/30 sticky left-0 z-10 ${isEntrada ? "py-3" : "py-1.5"}`}>
+                    <EditMemberPopover member={row}>
+                      <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer w-full text-left">
+                        <div
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: row.color }}
+                        />
+                        <span className={`text-xs font-medium ${isEntrada ? "whitespace-normal max-w-[90px]" : "truncate max-w-[80px]"}`}>
+                          {row.name}
+                        </span>
+                      </button>
+                    </EditMemberPopover>
+                  </td>
+                  {weekDays.map((day, dayIdx) => {
+                    const dateStr = formatDate(day);
+                    const isToday = dateStr === today;
+                    return (
+                      <td
+                        key={dateStr}
+                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : ""
+                          }`}
+                        style={{ zIndex: 10 - dayIdx }}
+                      >
+                        <ScheduleCell memberId={row.id} date={dateStr} isEntradaEntrega={isEntrada} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
