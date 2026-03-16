@@ -71,49 +71,43 @@ const defaultMembers: TeamMember[] = [
   { id: "m5", name: "Julio", role: "3d", color: "#2563eb" },
   { id: "m6", name: "Evandro", role: "3d", color: "#2563eb" },
   { id: "m7", name: "Mari", role: "3d", color: "#2563eb" },
+  { id: "TdyNfZ0C", name: "Vinicius", role: "creative", color: "#7c3aed" }
 ];
 
 const defaultProjects: Project[] = [
-  { id: "p1", name: "GULOZITOS", color: "#64748b", status: "active" },
-  { id: "p2", name: "MBRF", color: "#64748b", status: "active" },
-  { id: "p3", name: "TIKTOK", color: "#64748b", status: "active" },
-  { id: "p4", name: "SESC SENAC", color: "#64748b", status: "active" },
-  { id: "p5", name: "TNS SUMMIT", color: "#64748b", status: "active" },
-  { id: "p6", name: "BEFLY", color: "#64748b", status: "active" },
-  { id: "p7", name: "HONDA", color: "#64748b", status: "active" },
+  { id: "8IkoPBzY", name: "GULOZITOS", color: "#64748b", status: "active" },
+  { id: "GPhSiPJl", name: "SESC SENAC", color: "#64748b", status: "active" },
+  { id: "VLEC3mz6", name: "TIKTOK", color: "#64748b", status: "active" },
+  { id: "2S4yXlfs", name: "TNS SUMMIT", color: "#64748b", status: "active" },
+  { id: "tNT6ivzP", name: "BEFLY BE TOGETHER", color: "#64748b", status: "active" },
+  { id: "2iJoYkNk", name: "MBRF", color: "#64748b", status: "active" },
+  { id: "Kyx_zt5V", name: "NESTLÉ", color: "#64748b", status: "active" },
+  { id: "zwTpeSmf", name: "HONDA INTERLAGOS", color: "#64748b", status: "completed" },
+  { id: "TorDd7bS", name: "GEELY EX5", color: "#64748b", status: "completed" },
+  { id: "aXJB3qkC", name: "KITKAT RIR", color: "#64748b", status: "completed" },
+  { id: "3ge1eg7M", name: "BOTICÁRIO DIA MÃES", color: "#64748b", status: "completed" },
+  { id: "5x0gQuhc", name: "JETOUR", color: "#64748b", status: "completed" },
+  { id: "94ngjY7L", name: "PBSF PACAEMBU", color: "#64748b", status: "completed" },
+  { id: "PyiUJCTY", name: "P&G PDV", color: "#64748b", status: "completed" },
+  { id: "3JsUW-c9", name: "TIM RIR", color: "#64748b", status: "completed" },
+  { id: "PVcrCz_L", name: "MERCEDES 70 ANOS", color: "#64748b", status: "completed" },
+  { id: "K51HlkO1", name: "ZAMP", color: "#64748b", status: "completed" },
+  { id: "6ytgKP2r", name: "MBRF", color: "#64748b", status: "completed" },
+  { id: "Gjb1Y4YF", name: "OTO SYNGENTA", color: "#64748b", status: "completed" },
+  { id: "OYuO3QyQ", name: "CLARO RIO OPEN", color: "#64748b", status: "completed" },
+  { id: "Ft6-CNpK", name: "PIRACANJUBA", color: "#64748b", status: "completed" },
+  { id: "zLLNiirf", name: "XP RIO OPEN", color: "#64748b", status: "completed" },
+  { id: "R0Do3qf0", name: "HAVAIANAS", color: "#64748b", status: "completed" },
+  { id: "UJIlYtn9", name: "CIELO LOLLA", color: "#64748b", status: "completed" },
+  { id: "JdodsLuE", name: "FORD INTERLAGOS", color: "#64748b", status: "active" },
+  { id: "Wr72p_7y", name: "COCA COLA NATAL", color: "#64748b", status: "active" },
+  { id: "n6yC51hh", name: "TCL GAMES COM", color: "#64748b", status: "active" },
+  { id: "VYp2d9kn", name: "MERCEDES FENATRAN", color: "#64748b", status: "active" },
+  { id: "Epfz7_ji", name: "SANTANDER INTERLAGOS", color: "#64748b", status: "active" }
 ];
 
 const defaultAssignments: Assignment[] = [
-  // GULOZITOS
-  { id: "a1", memberId: "m1", projectId: "p1", role: "creative" },
-  { id: "a2", memberId: "m3", projectId: "p1", role: "architect" },
-  { id: "a3", memberId: "m4", projectId: "p1", role: "3d" },
-  // MBRF
-  { id: "a4", memberId: "m1", projectId: "p2", role: "creative" },
-  { id: "a5", memberId: "m2", projectId: "p2", role: "architect" },
-  { id: "a6", memberId: "m6", projectId: "p2", role: "3d" },
-  // TIKTOK
-  { id: "a7", memberId: "m1", projectId: "p3", role: "creative" },
-  { id: "a8", memberId: "m3", projectId: "p3", role: "architect" },
-  { id: "a9", memberId: "m4", projectId: "p3", role: "3d" },
-  // SESC SENAC
-  { id: "a10", memberId: "m1", projectId: "p4", role: "creative" },
-  { id: "a11", memberId: "m2", projectId: "p4", role: "architect" },
-  { id: "a12", memberId: "m5", projectId: "p4", role: "3d" },
-  // TNS SUMMIT
-  { id: "a13", memberId: "m1", projectId: "p5", role: "creative" },
-  { id: "a14", memberId: "m2", projectId: "p5", role: "architect" },
-  { id: "a15", memberId: "m6", projectId: "p5", role: "3d" },
-  { id: "a16", memberId: "m5", projectId: "p5", role: "3d" },
-  // BEFLY
-  { id: "a17", memberId: "m1", projectId: "p6", role: "creative" },
-  { id: "a18", memberId: "m3", projectId: "p6", role: "architect" },
-  { id: "a19", memberId: "m6", projectId: "p6", role: "3d" },
-  // HONDA
-  { id: "a20", memberId: "m1", projectId: "p7", role: "creative" },
-  { id: "a21", memberId: "m2", projectId: "p7", role: "architect" },
-  { id: "a22", memberId: "m4", projectId: "p7", role: "3d" },
-  { id: "a23", memberId: "m5", projectId: "p7", role: "3d" },
+  { id: "qbIXKpGv", memberId: "m2", projectId: "2iJoYkNk", role: "architect" }
 ];
 
 // ─── Persistence ─────────────────────────────────────────────────
@@ -269,8 +263,13 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
 
   const setState = useCallback(
     (newState: NetworkState) => {
-      saveState(newState);
-      setStateInternal(newState);
+      const validatedState: NetworkState = {
+        members: newState.members || [],
+        projects: newState.projects || [],
+        assignments: newState.assignments || [],
+      };
+      saveState(validatedState);
+      setStateInternal(validatedState);
     },
     []
   );

@@ -115,7 +115,7 @@ export default function ScheduleFooter({ hoveredProjectId, highlightMemberId }: 
           <ChevronUp className="w-3.5 h-3.5 text-white/50" />
         )}
         <span className="text-[10px] text-white/40 ml-1.5 uppercase tracking-wider font-medium">
-          {hoveredCard ? `Diárias — ${hoveredCard.name}` : "Agenda"}
+          {hoveredCard ? `Timeline — ${hoveredCard.name}` : "Agenda"}
         </span>
       </button>
 
@@ -123,13 +123,14 @@ export default function ScheduleFooter({ hoveredProjectId, highlightMemberId }: 
         <div className="bg-black/15 backdrop-blur-md border-t border-white/5">
           {hoveredCard ? (
             /* ─── Diárias panel for hovered project ─── */
-            <div className="p-1">
+            <div className="p-1 w-full" style={{ height: '400px' }}>
               <DailyAllocationPanel
                 cardId={hoveredCard.id}
                 cardName={hoveredCard.name}
                 entryDate={hoveredCard.entryDate}
                 deliveryDate={hoveredCard.deliveryDate}
                 allocations={hoveredCard.dailyAllocations || {}}
+                timelinePins={hoveredCard.timelinePins || []}
                 onClose={() => {}}
               />
             </div>
@@ -166,16 +167,18 @@ export default function ScheduleFooter({ hoveredProjectId, highlightMemberId }: 
                         return (
                           <th
                             key={formatDate(day)}
-                            className={`text-center px-1 py-1.5 border-l border-white/5 min-w-[80px] ${
+                            className={`text-center px-1 py-1 border-l border-white/5 min-w-[80px] ${
                               isToday ? "bg-primary/10" : ""
                             }`}
                           >
-                            <span className={`text-[11px] font-bold ${isToday ? "text-primary" : "text-white/70"}`}>
-                              {dayNum}
-                            </span>
-                            <span className={`text-[9px] ml-1 ${isToday ? "text-primary/60" : "text-white/30"}`}>
-                              {weekday}
-                            </span>
+                            <div className="flex flex-col items-center select-none pointer-events-none">
+                              <span className={`text-[9px] uppercase font-bold tracking-tight ${isToday ? "text-primary/80" : "text-white/30"}`}>
+                                {weekday}
+                              </span>
+                              <span className={`text-[9px] font-bold ${isToday ? "text-primary" : "text-white/60"}`}>
+                                {dayNum}
+                              </span>
+                            </div>
                           </th>
                         );
                       })}

@@ -5,8 +5,23 @@
  */
 import { useNetwork, type MemberRole, ROLE_LABELS } from "@/contexts/NetworkContext";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSchedule } from "@/contexts/ScheduleContext";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import * as d3 from "d3";
+
+// ─── Date helpers ────────────────────────────────────────────────
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatDate(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
 
 interface GraphNode extends d3.SimulationNodeDatum {
   id: string;
@@ -48,6 +63,7 @@ export default function NetworkGraph({
 }: NetworkGraphProps) {
   const { state, removeAssignmentByLink } = useNetwork();
   const { state: cardsState, updateTeamMember } = useProjectCards();
+  const { state: scheduleState, getWeekRoster } = useSchedule();
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
@@ -58,6 +74,8 @@ export default function NetworkGraph({
   const onNodeClickRef = useRef(onNodeClick);
   onNodeClickRef.current = onNodeClick;
   const [dimensions, setDimensions] = useState({ width: 900, height: 600 });
+  const [, setTick] = useState(0); // Dummy state to force refresh
+
 
   useEffect(() => {
     const container = containerRef.current;
@@ -74,6 +92,14 @@ export default function NetworkGraph({
     return () => ro.disconnect();
   }, []);
 
+  // Timer to refresh connections when period changes (at 13h or midnight)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick(t => t + 1);
+    }, 60000); // Check every minute
+    return () => clearInterval(timer);
+  }, []);
+
   const buildGraphData = useCallback(() => {
     const nodes: GraphNode[] = [];
     const links: GraphLink[] = [];
@@ -87,18 +113,30 @@ export default function NetworkGraph({
       radius: 42,
     });
 
-    // Filter members from NetworkContext
-    const filteredMembers =
-      filterRole === "all"
-        ? state.members
-        : state.members.filter((m) => m.role === filterRole);
+    // --- Dynamic Team Members (based on Weekly Roster) ---
+    const weekKey = formatDate(getMonday(new Date()));
+    const rosterIds = getWeekRoster(weekKey, state.members.map(m => m.id));
+
+    const filteredMembers = state.members.filter(m => {
+      // 1. Must be in the weekly roster
+      if (!rosterIds.includes(m.id)) return false;
+      
+      // 2. Role filter (if any)
+      if (filterRole !== "all" && m.role !== filterRole) return false;
+
+      // 3. Exclude Vinícius
+      const name = m.name?.toLowerCase() || "";
+      if (name.includes("vinicius") || name.includes("vinícius")) return false;
+
+      return true;
+    });
 
     filteredMembers.forEach((m) => {
       nodes.push({
         id: m.id,
-        label: m.name.toUpperCase(),
+        label: (m.name || "Sem Nome").toUpperCase(),
         type: "member",
-        color: m.color,
+        color: m.color || "#ffffff",
         role: m.role,
         radius: 26,
       });
@@ -111,117 +149,105 @@ export default function NetworkGraph({
       "3d": "3d",
     };
 
-    const memberIds = new Set(filteredMembers.map((m) => m.id));
     const addedLinkIds = new Set<string>();
 
-    // Build projects and assignments from ProjectCards (only active)
-    cardsState.cards.filter((card) => card.active !== false).forEach((card) => {
-      // Build assignments: match card team members to network members by name
-      const projectAssignments: { memberId: string; role: MemberRole; color: string; name: string; cardTeamMemberId: string; cardId: string }[] = [];
+    // 1. Add ALL active projects as initial nodes (except PUB INTERNO)
+    const pubInternoId = cardsState.cards.find(c => c.name === "PUB INTERNO")?.id;
 
-      card.team.forEach((tm) => {
-        if (!tm.name || tm.name.trim() === "") return; // skip empty names
-        const networkMember = filteredMembers.find(
-          (m) => m.name.toLowerCase() === tm.name.toLowerCase()
-        );
-        if (networkMember) {
-          const mappedRole = roleMap[tm.role] || "creative";
-          projectAssignments.push({
-            memberId: networkMember.id,
-            role: mappedRole,
-            color: networkMember.color,
-            name: networkMember.name,
-            cardTeamMemberId: tm.id,
-            cardId: card.id,
-          });
-        }
+    cardsState.cards.filter(card => card.active !== false && card.name !== "PUB INTERNO").forEach(card => {
+      nodes.push({
+        id: card.id,
+        label: card.name || "Projeto sem Nome",
+        type: "project",
+        color: "#64748b",
+        radius: 44,
+        status: "active",
+        memberSlots: [],
+        isMissingDates: !card.entryDate || !card.deliveryDate,
       });
+    });
 
-      // Only add project if it has at least one visible member connected
-      if (projectAssignments.length > 0 || filterRole === "all") {
-        const slots = projectAssignments.map((a) => ({
-          role: a.role,
-          color: a.color,
-          name: a.name,
-        }));
+    // --- AUTOMATIC CONNECTIONS BASED ON SCHEDULE ---
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    const todayDate = new Date(todayStr + "T12:00:00");
+    
+    // Period definition: Morning (before 14h) vs Afternoon (from 14h)
+    const isPM = now.getHours() >= 14;
+    
+    // Filter entries that are active in the current period of today
+    const todayEntries = scheduleState.entries.filter(e => {
+      if (!e.projectId) return false;
+      
+      const startDate = new Date(e.date + "T12:00:00");
+      const diffDays = Math.floor((todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // If today is outside the range [start, start + duration)
+      if (diffDays < 0 || diffDays >= (e.duration || 1)) return false;
 
-        nodes.push({
-          id: card.id,
-          label: card.name,
-          type: "project",
-          color: "#64748b",
-          radius: 44,
-          status: "active",
-          memberSlots: slots,
-          isMissingDates: !card.entryDate || !card.deliveryDate,
-        });
+      // Calculate entry's relative interval for today [entryDayStart, entryDayEnd]
+      // Day range is [0.0, 1.0]
+      const entryDayStart = diffDays === 0 ? (e.startOffset || 0) : 0;
+      const entryDayEnd = entryDayStart + ((e.duration || 1) - diffDays);
 
-        projectAssignments.forEach((a) => {
-          const linkId = `${a.memberId}-${card.id}`;
-          if (!addedLinkIds.has(linkId)) {
-            addedLinkIds.add(linkId);
-            links.push({
-              id: linkId,
-              source: a.memberId,
-              target: card.id,
-              color: a.color,
-              memberId: a.memberId,
-              projectId: card.id,
-              cardTeamMemberId: a.cardTeamMemberId,
-              cardId: a.cardId,
-            });
-          }
-        });
+      if (isPM) {
+        // Afternoon period: [0.5, 1.0]
+        // Entry is visible if it overlaps with [0.5, 1.0]
+        return entryDayEnd > 0.5;
+      } else {
+        // Morning period: [0.0, 0.5]
+        return entryDayStart < 0.5;
       }
     });
 
-    // Also add links from NetworkContext assignments (created via SidePanel Conexões)
-    state.assignments.forEach((a) => {
-      const linkId = `${a.memberId}-${a.projectId}`;
-      if (addedLinkIds.has(linkId)) return; // already added from card data
-      if (!memberIds.has(a.memberId)) return; // member is filtered out
+    // Map schedule entries to project slots and links
+    todayEntries.forEach(entry => {
+      // Find nodes directly from the nodes array to ensure valid D3 links
+      const memberNode = nodes.find(n => n.id === entry.memberId && n.type === "member");
+      
+      // Special check for PUB INTERNO -> connects to hub
+      const isPubInterno = entry.projectId === pubInternoId;
+      const projNode = isPubInterno 
+        ? nodes.find(n => n.id === "hub")
+        : nodes.find(n => n.id === entry.projectId && n.type === "project");
+      
+      if (!memberNode || !projNode) return;
 
-      const member = filteredMembers.find((m) => m.id === a.memberId);
-      if (!member) return;
-
-      // Ensure project node exists
-      const projectExists = nodes.some((n) => n.id === a.projectId);
-      if (!projectExists) {
-        // Try to find card data for label
-        const card = cardsState.cards.find((c) => c.id === a.projectId);
-        const proj = state.projects.find((p) => p.id === a.projectId);
-        const label = card?.name || proj?.name || "Projeto";
-        nodes.push({
-          id: a.projectId,
-          label,
-          type: "project",
-          color: "#64748b",
-          radius: 44,
-          status: "active",
-          memberSlots: [{ role: a.role, color: member.color, name: member.name }],
-          isMissingDates: card ? (!card.entryDate || !card.deliveryDate) : false,
-        });
-      } else {
-        // Add slot to existing project node
-        const projNode = nodes.find((n) => n.id === a.projectId);
-        if (projNode && projNode.memberSlots) {
-          projNode.memberSlots.push({ role: a.role, color: member.color, name: member.name });
+      // Add member slot to project (if not already added for this project)
+      // Hub also has slots? No, let's only add for regular projects for now
+      // unless user wants them in the central PUB too.
+      if (projNode.type === "project" && projNode.memberSlots) {
+        const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
+        if (!alreadyAdded) {
+          projNode.memberSlots.push({
+            role: memberNode.role!,
+            color: memberNode.color,
+            name: memberNode.label
+          });
         }
       }
 
-      addedLinkIds.add(linkId);
-      links.push({
-        id: linkId,
-        source: a.memberId,
-        target: a.projectId,
-        color: member.color,
-        memberId: a.memberId,
-        projectId: a.projectId,
-      });
+      // Create link (avoid duplicates for the same member-project pair)
+      // Use the original projectId for the link, even if it connects to the hub
+      const linkId = `${memberNode.id}-${entry.projectId}`;
+      if (!addedLinkIds.has(linkId)) {
+        addedLinkIds.add(linkId);
+        links.push({
+          id: linkId,
+          source: memberNode.id,
+          target: projNode.id, // Target is the actual node (hub or project)
+          color: memberNode.color,
+          memberId: memberNode.id,
+          projectId: entry.projectId as string, // Cast to string since it's guarded by filter
+        });
+      }
     });
 
     return { nodes, links };
-  }, [state, cardsState, filterRole]);
+  }, [state, cardsState, scheduleState, filterRole]);
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);
@@ -438,16 +464,42 @@ export default function NetworkGraph({
           .attr("fill", statusColor)
           .attr("filter", "url(#glow)");
 
-        // Project name
-        el.append("text")
+        // Project name with multiline support
+        const text = el.append("text")
           .attr("text-anchor", "middle")
-          .attr("dy", d.memberSlots && d.memberSlots.length > 0 ? "-0.4em" : "0.1em")
           .attr("fill", "#e2e8f0")
-          .attr("font-size", d.label.length > 10 ? "9px" : "11px")
+          .attr("font-size", "10px")
           .attr("font-weight", "700")
           .attr("font-family", "Sora, sans-serif")
-          .attr("letter-spacing", "0.06em")
-          .text(d.label);
+          .attr("letter-spacing", "0.04em");
+
+        const hasSlots = d.memberSlots && d.memberSlots.length > 0;
+        const labelText = d.label || "";
+        const words = labelText.split(/\s+/).filter(Boolean);
+        let line: string[] = [];
+        const lines: string[] = [];
+        const maxChars = 10;
+        
+        words.forEach(word => {
+          if ((line.join(" ") + " " + word).length > maxChars && line.length > 0) {
+            lines.push(line.join(" "));
+            line = [word];
+          } else {
+            line.push(word);
+          }
+        });
+        if (line.length > 0) lines.push(line.join(" "));
+
+        const lineHeight = 11;
+        const totalHeight = lines.length * lineHeight;
+        const startY = (hasSlots ? -totalHeight / 2 - 2 : -totalHeight / 2 + 5);
+
+        lines.forEach((l, i) => {
+          text.append("tspan")
+            .attr("x", 0)
+            .attr("y", startY + i * lineHeight)
+            .text(l);
+        });
 
         // Role slots (mini circles inside card)
         if (d.memberSlots && d.memberSlots.length > 0) {

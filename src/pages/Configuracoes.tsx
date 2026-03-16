@@ -14,9 +14,25 @@ function ProjectCardsSection({ onOpenDialog }: { onOpenDialog: () => void }) {
   const { state } = useProjectCards();
   const [filter, setFilter] = useState<"ativos" | "inativos">("ativos");
 
-  const filteredCards = state.cards.filter((card) =>
-    filter === "ativos" ? card.active !== false : card.active === false
-  );
+  const filteredCards = [...state.cards]
+    .filter((card) =>
+      filter === "ativos" ? card.active !== false : card.active === false
+    )
+    .sort((a, b) => {
+      // 1. "PUB INTERNO" always first
+      if (a.name === "PUB INTERNO") return -1;
+      if (b.name === "PUB INTERNO") return 1;
+
+      const aHasDates = !!a.entryDate && !!a.deliveryDate;
+      const bHasDates = !!b.entryDate && !!b.deliveryDate;
+      
+      // 2. If one has dates and the other doesn't, prioritize the one with dates
+      if (aHasDates && !bHasDates) return -1;
+      if (!aHasDates && bHasDates) return 1;
+      
+      // 3. Alphabetical by name
+      return (a.name || "").localeCompare(b.name || "");
+    });
 
   return (
     <section className="p-4 sm:p-6 pt-0">

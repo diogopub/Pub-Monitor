@@ -3,7 +3,7 @@
  * Linhas: membros da equipe + linhas especiais (freelancers, entradas/entregas)
  * Colunas: dias da semana (seg-sex) com navegação
  */
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork, ROLE_COLORS, type MemberRole } from "@/contexts/NetworkContext";
 import {
@@ -124,18 +124,62 @@ function ProjectPicker({
   onBack,
   activityLabel,
 }: {
-  onSelect: (projectId: string) => void;
+  onSelect: (projectId: string, customLabel?: string) => void;
   onBack: () => void;
   activityLabel: string;
 }) {
   const { state: cardsState } = useProjectCards();
   const [search, setSearch] = useState("");
+  const [customMode, setCustomMode] = useState(false);
+  const [customText, setCustomText] = useState("");
   const activeCards = cardsState.cards.filter((c) => c.active !== false);
   const filtered = search
     ? activeCards.filter((c) =>
       c.name.toLowerCase().includes(search.toLowerCase())
     )
     : activeCards;
+
+  if (customMode) {
+    return (
+      <div className="w-56">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <button
+            onClick={() => setCustomMode(false)}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <ChevronLeft className="w-3 h-3" />
+            Voltar
+          </button>
+          <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+            {activityLabel}
+          </span>
+        </div>
+        <div className="p-3 space-y-2">
+          <p className="text-[10px] font-semibold text-muted-foreground uppercase">Nome personalizado</p>
+          <input
+            type="text"
+            placeholder="Digite o nome..."
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            autoFocus
+            className="w-full bg-secondary/50 rounded px-2 py-1.5 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary/50 border border-transparent focus:border-primary/30"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && customText.trim()) {
+                onSelect("", customText.trim());
+              }
+            }}
+          />
+          <button
+            disabled={!customText.trim()}
+            onClick={() => onSelect("", customText.trim())}
+            className="w-full text-center py-1.5 rounded text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 transition-colors"
+          >
+            Confirmar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-56">
@@ -166,6 +210,13 @@ function ProjectPicker({
       </div>
       <ScrollArea className="max-h-[260px]">
         <div className="p-1.5 space-y-0.5">
+          {/* Personalizado */}
+          <button
+            onClick={() => setCustomMode(true)}
+            className="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+          >
+            ✏️ Personalizado
+          </button>
           {/* Option without project */}
           <button
             onClick={() => onSelect("")}
@@ -302,7 +353,7 @@ function TaskBar({
       }}
     >
       <div className="flex-1 truncate text-center px-1.5 pointer-events-none select-none">
-        {proj ? proj.name : act.label}
+        {entry.customLabel || (proj ? proj.name : act.label)}
       </div>
 
       <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity">
@@ -390,9 +441,9 @@ function ScheduleCell({
     }
   };
 
-  const handleProjectSelect = (projectId: string) => {
+  const handleProjectSelect = (projectId: string, customLabel?: string) => {
     if (selectedActivity) {
-      addEntry(memberId, date, selectedActivity.id, projectId || undefined);
+      addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel);
     }
     setOpen(false);
     setStep("activity");
@@ -621,36 +672,78 @@ function AddMemberPopover() {
   );
 }
 
+// ─── Add Member To Week Popover ──────────────────────────────────
+function AddMemberToWeekPopover({
+  weekKey,
+  currentRoster,
+  allMembers,
+}: {
+  weekKey: string;
+  currentRoster: string[];
+  allMembers: { id: string; name: string; color: string }[];
+}) {
+  const { setWeekRoster } = useSchedule();
+  const [open, setOpen] = useState(false);
+
+  const missing = allMembers.filter((m) => !currentRoster.includes(m.id));
+
+  const handleAdd = (memberId: string) => {
+    setWeekRoster(weekKey, [...currentRoster, memberId]);
+    setOpen(false);
+  };
+
+  if (missing.length === 0) return null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="text-muted-foreground hover:text-foreground transition-colors" title="Adicionar membro nesta semana">
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-44 p-1.5 space-y-0.5" side="right" align="start">
+        <p className="text-[10px] font-semibold uppercase text-muted-foreground px-2 py-1">
+          Adicionar nesta semana
+        </p>
+        {missing.map((m) => (
+          <button
+            key={m.id}
+            onClick={() => handleAdd(m.id)}
+            className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent/50 text-xs"
+          >
+            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
+            {m.name}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function WeeklySchedule() {
   const { state: networkState } = useNetwork();
-  const { state: scheduleState } = useSchedule();
+  const { state: scheduleState, getWeekRoster, setWeekRoster } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+
+  const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
 
   // Active projects allocations summary
   const activeProjectSummaries = useMemo(() => {
     const summaries = new Map<string, number>();
-
-    // Only active project cards
     const activeCards = cardsState.cards.filter(c => c.active !== false);
     const activeCardIds = new Set(activeCards.map(c => c.id));
-
-    // Sum all durations from all times and members
     scheduleState.entries.forEach(entry => {
       if (entry.projectId && activeCardIds.has(entry.projectId)) {
         const dur = entry.duration || 1;
         summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + dur);
       }
     });
-
     const result: string[] = [];
     summaries.forEach((dur, pId) => {
       const card = activeCards.find(c => c.id === pId);
-      if (card) {
-        result.push(`${card.name}: ${dur}`);
-      }
+      if (card) result.push(`${card.name}: ${dur}`);
     });
-
     return result.sort().join("   |   ");
   }, [scheduleState.entries, cardsState.cards]);
 
@@ -664,24 +757,29 @@ export default function WeeklySchedule() {
 
   const today = formatDate(new Date());
 
-  // All rows: team members + special rows
+  // Master member list (all members defined in NetworkContext)
+  const allMemberIds = useMemo(() => networkState.members.map((m) => m.id), [networkState.members]);
+
+  // Per-week effective roster (inherits from previous edited week)
+  const weekRosterIds = useMemo(() => getWeekRoster(weekKey, allMemberIds), [weekKey, allMemberIds, getWeekRoster]);
+
+  // Remove a member from this week's roster
+  const handleRemoveMemberFromWeek = useCallback((memberId: string) => {
+    setWeekRoster(weekKey, weekRosterIds.filter((id) => id !== memberId));
+  }, [weekKey, weekRosterIds, setWeekRoster]);
+
+  // All rows: team members (from per-week roster) + special rows
   const rows = useMemo(() => {
-    const memberRows = networkState.members.map((m) => ({
-      id: m.id,
-      name: m.name,
-      color: m.color,
-      type: "member" as const,
-    }));
+    // Only members present in this week's roster, preserving roster order
+    const memberRows = weekRosterIds
+      .map((id) => networkState.members.find((m) => m.id === id))
+      .filter(Boolean)
+      .map((m) => ({ id: m!.id, name: m!.name, color: m!.color, type: "member" as const }));
     const specialRows = scheduleState.specialRows
       .filter((r) => r.type !== "freelancer")
-      .map((r) => ({
-        id: r.id,
-        name: r.name,
-        color: "#6366f1",
-        type: r.type as "entradas-entregas",
-      }));
+      .map((r) => ({ id: r.id, name: r.name, color: "#6366f1", type: r.type as "entradas-entregas" }));
     return [...memberRows, ...specialRows];
-  }, [networkState.members, scheduleState.specialRows]);
+  }, [weekRosterIds, networkState.members, scheduleState.specialRows]);
 
   return (
     <div className="border border-border rounded-lg bg-card/40 backdrop-blur-sm overflow-hidden">
@@ -717,7 +815,11 @@ export default function WeeklySchedule() {
           <thead>
             <tr>
               <th className="w-[120px] text-left px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-card/40 sticky left-0 z-10">
-                <AddMemberPopover />
+                <AddMemberToWeekPopover
+                  weekKey={weekKey}
+                  currentRoster={weekRosterIds}
+                  allMembers={networkState.members}
+                />
               </th>
               {weekDays.map((day) => {
                 const { day: dayNum, weekday } = formatDayHeader(day);
@@ -728,11 +830,13 @@ export default function WeeklySchedule() {
                     className={`text-center px-2 py-2 border-b border-l border-border min-w-[140px] ${isToday ? "bg-primary/10" : "bg-card/40"
                       }`}
                   >
-                    <div className={`text-lg font-bold font-heading ${isToday ? "text-primary" : "text-foreground"}`}>
-                      {dayNum}
-                    </div>
-                    <div className={`text-[10px] ${isToday ? "text-primary/70" : "text-muted-foreground"}`}>
-                      {weekday}
+                    <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
+                      <div className={`text-[10px] font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"}`}>
+                        {weekday}
+                      </div>
+                      <div className={`text-[13px] font-bold font-heading ${isToday ? "text-primary" : "text-foreground"}`}>
+                        {dayNum}
+                      </div>
                     </div>
                   </th>
                 );
@@ -745,17 +849,28 @@ export default function WeeklySchedule() {
               return (
                 <tr key={row.id} className={`group/row hover:bg-accent/10 transition-colors ${isEntrada ? "min-h-[64px]" : ""}`}>
                   <td className={`px-3 border-b border-border bg-card/30 sticky left-0 z-10 ${isEntrada ? "py-3" : "py-1.5"}`}>
-                    <EditMemberPopover member={row}>
-                      <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer w-full text-left">
-                        <div
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: row.color }}
-                        />
-                        <span className={`text-xs font-medium ${isEntrada ? "whitespace-normal max-w-[90px]" : "truncate max-w-[80px]"}`}>
-                          {row.name}
-                        </span>
-                      </button>
-                    </EditMemberPopover>
+                    <div className="flex items-center gap-1 group/rowlabel">
+                      <EditMemberPopover member={row}>
+                        <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left">
+                          <div
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: row.color }}
+                          />
+                          <span className={`text-xs font-medium ${isEntrada ? "whitespace-normal max-w-[70px]" : "truncate max-w-[70px]"}`}>
+                            {row.name}
+                          </span>
+                        </button>
+                      </EditMemberPopover>
+                      {row.type === "member" && (
+                        <button
+                          onClick={() => handleRemoveMemberFromWeek(row.id)}
+                          className="opacity-0 group-hover/rowlabel:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+                          title="Remover desta semana"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {weekDays.map((day, dayIdx) => {
                     const dateStr = formatDate(day);

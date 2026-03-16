@@ -7,6 +7,7 @@ import { createPortal } from "react-dom";
 import {
   useProjectCards,
   type ProjectCardData,
+  type ProjectStatus,
 } from "@/contexts/ProjectCardsContext";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { Switch } from "@/components/ui/switch";
@@ -69,6 +70,14 @@ function getProgressColor(pct: number): string {
   if (pct >= 40) return "#eab308";
   return "#22c55e";
 }
+
+// ─── Project Status ───────────────────────────────────────────────
+const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; next: ProjectStatus }> = {
+  "em-desenvolvimento": { label: "WORK IN PROGRESS", color: "#22c55e", next: "onboarding" },
+  "onboarding": { label: "ONBOARDING", color: "#eab308", next: "standby" },
+  "standby": { label: "STANDBY", color: "#f97316", next: "aguardando-retorno" },
+  "aguardando-retorno": { label: "VALIDAÇÃO CLIENTE", color: "#ef4444", next: "em-desenvolvimento" },
+};
 
 // ─── Team Role Badge ─────────────────────────────────────────────
 const ROLE_STYLES: Record<string, { bg: string; label: string }> = {
@@ -199,56 +208,29 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
 
   return (
     <div className={`border ${borderColorClass} rounded-xl bg-card/60 backdrop-blur-sm overflow-hidden flex flex-col w-full max-w-[280px] transition-colors duration-300`}>
-      {/* Feed */}
+      {/* STATUS */}
       <div className="px-3 py-2 border-b border-border">
         <div className="flex items-center gap-1.5 mb-1">
-          <Rss className="w-3 h-3 text-primary" />
-          <span className="text-[10px] font-bold font-heading uppercase tracking-wider text-foreground flex-1">
-            FEED
+          <span className="text-[10px] font-bold font-heading uppercase tracking-wider text-muted-foreground">
+            STATUS
           </span>
-          {allFeed.length > 1 && (
-            <div className="flex items-center gap-0.5">
-              <button
-                onClick={() => setFeedIndex(Math.max(0, currentFeedIndex - 1))}
-                disabled={currentFeedIndex === 0}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-              >
-                <ChevronUp className="w-3 h-3" />
-              </button>
-              <button
-                onClick={() => setFeedIndex(Math.min(allFeed.length - 1, currentFeedIndex + 1))}
-                disabled={currentFeedIndex >= allFeed.length - 1}
-                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
-              >
-                <ChevronDown className="w-3 h-3" />
-              </button>
-            </div>
-          )}
         </div>
-        <div className="min-h-[20px]">
-          {allFeed.length > 0 ? (
-            <div className="flex items-start gap-1 group/feed">
-              <p className="text-[10px] text-muted-foreground leading-tight flex-1">
-                {allFeed[currentFeedIndex]?.message}
-              </p>
-              <button
-                onClick={() => {
-                  const entry = allFeed[currentFeedIndex];
-                  if (entry) {
-                    removeFeedEntry(card.id, entry.id);
-                    setFeedIndex(Math.max(0, currentFeedIndex - 1));
-                  }
-                }}
-                className="opacity-0 group-hover/feed:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <p className="text-[10px] text-muted-foreground italic">
-              Nenhuma atualização.
-            </p>
-          )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const current: ProjectStatus = card.projectStatus || "em-desenvolvimento";
+              updateCard(card.id, { projectStatus: STATUS_CONFIG[current].next });
+            }}
+            className="w-3 h-3 rounded-full shrink-0 transition-all hover:scale-125 shadow-md ring-2 ring-offset-2 ring-offset-card"
+            style={{
+              backgroundColor: STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color,
+              boxShadow: `0 0 0 2px ${STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color}55`,
+            }}
+            title="Clique para mudar o status"
+          />
+          <span className="text-[10px] font-bold tracking-wide" style={{ color: STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color }}>
+            {STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].label}
+          </span>
         </div>
       </div>
 
@@ -350,7 +332,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 onClick={() => setShowDiarias(true)}
                 className="px-2.5 py-0.5 rounded border border-border bg-card font-semibold text-foreground hover:bg-secondary/80 transition-colors cursor-pointer text-[10px]"
               >
-                Diárias
+                Crono
               </button>
             </div>
             <span className="text-muted-foreground font-mono">{daysToDelivery !== null ? Math.abs(daysToDelivery) : "-"}</span>
@@ -360,13 +342,14 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
 
       {showDiarias && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80" onClick={() => setShowDiarias(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
+          <div onClick={(e) => e.stopPropagation()} className="w-[95vw] h-[95vh] max-w-none max-h-none overflow-hidden rounded-lg shadow-2xl relative">
             <DailyAllocationPanel
               cardId={card.id}
               cardName={card.name}
               entryDate={card.entryDate}
               deliveryDate={card.deliveryDate}
               allocations={card.dailyAllocations || {}}
+              timelinePins={card.timelinePins || []}
               onClose={() => setShowDiarias(false)}
             />
           </div>
@@ -397,6 +380,59 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
           ))}
           {card.team.length === 0 && (
             <p className="text-[10px] text-muted-foreground italic">Nenhum membro</p>
+          )}
+        </div>
+      </div>
+
+      {/* Feed */}
+      <div className="px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Rss className="w-3 h-3 text-primary" />
+          <span className="text-[10px] font-bold font-heading uppercase tracking-wider text-foreground flex-1">
+            FEED
+          </span>
+          {allFeed.length > 1 && (
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => setFeedIndex(Math.max(0, currentFeedIndex - 1))}
+                disabled={currentFeedIndex === 0}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                <ChevronUp className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => setFeedIndex(Math.min(allFeed.length - 1, currentFeedIndex + 1))}
+                disabled={currentFeedIndex >= allFeed.length - 1}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="min-h-[20px]">
+          {allFeed.length > 0 ? (
+            <div className="flex items-start gap-1 group/feed">
+              <p className="text-[10px] text-muted-foreground leading-tight flex-1">
+                {allFeed[currentFeedIndex]?.message}
+              </p>
+              <button
+                onClick={() => {
+                  const entry = allFeed[currentFeedIndex];
+                  if (entry) {
+                    removeFeedEntry(card.id, entry.id);
+                    setFeedIndex(Math.max(0, currentFeedIndex - 1));
+                  }
+                }}
+                className="opacity-0 group-hover/feed:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground italic">
+              Nenhuma atualização.
+            </p>
           )}
         </div>
       </div>
