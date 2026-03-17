@@ -12,7 +12,7 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: "dist",
     emptyOutDir: true,
   },
 });
