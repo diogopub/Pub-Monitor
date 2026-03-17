@@ -1,5 +1,9 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { nanoid } from "nanoid";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { useAuth } from "./AuthContext";
+import { usePermissions } from "./PermissionsContext";
 
 // ─── Types ───────────────────────────────────────────────────────
 export interface ProjectDocument {
@@ -802,14 +806,42 @@ const ProjectCardsContext = createContext<ProjectCardsContextType | null>(null);
 
 export function ProjectCardsProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<ProjectCardsState>(loadState);
+  const { user } = useAuth();
+  const { currentUserRole } = usePermissions();
+  const isSyncingFromCloud = useRef(false);
+
+  // ☁️ SYNC FROM CLOUD
+  useEffect(() => {
+    if (!user) return;
+
+    const docRef = doc(db, "data", "cards");
+    const unsub = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const cloudData = snapshot.data() as ProjectCardsState;
+        isSyncingFromCloud.current = true;
+        setStateInternal(cloudData);
+        saveState(cloudData);
+        setTimeout(() => { isSyncingFromCloud.current = false; }, 100);
+      }
+    });
+
+    return () => unsub();
+  }, [user]);
 
   const updateState = useCallback((updater: (prev: ProjectCardsState) => ProjectCardsState) => {
     setStateInternal((prev) => {
       const next = updater(prev);
       saveState(next);
+
+      if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
+        setDoc(doc(db, "data", "cards"), next).catch(err => {
+          console.error("Erro ao salvar cards no Firestore:", err);
+        });
+      }
+
       return next;
     });
-  }, []);
+  }, [currentUserRole]);
 
   const addCard = useCallback(
     (data: Omit<ProjectCardData, "id" | "documents" | "feed">) => {

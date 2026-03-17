@@ -1,5 +1,9 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { nanoid } from "nanoid";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { useAuth } from "./AuthContext";
+import { usePermissions } from "./PermissionsContext";
 
 // ─── Types ───────────────────────────────────────────────────────
 export type MemberRole = "creative" | "architect" | "3d";
@@ -25,10 +29,16 @@ export interface Assignment {
   role: MemberRole;
 }
 
+export interface AppSettings {
+  googleAppsScriptUrl?: string;
+  autoBackupEnabled: boolean;
+}
+
 export interface NetworkState {
   members: TeamMember[];
   projects: Project[];
   assignments: Assignment[];
+  settings: AppSettings;
 }
 
 interface NetworkContextType {
@@ -47,6 +57,8 @@ interface NetworkContextType {
   removeAssignmentByLink: (memberId: string, projectId: string) => void;
   // Bulk
   setState: (state: NetworkState) => void;
+  // Settings
+  updateSettings: (updates: Partial<AppSettings>) => void;
 }
 
 // ─── Role colors ─────────────────────────────────────────────────
@@ -133,6 +145,9 @@ function loadState(): NetworkState {
     members: defaultMembers,
     projects: defaultProjects,
     assignments: defaultAssignments,
+    settings: {
+      autoBackupEnabled: false,
+    },
   };
 }
 
@@ -149,14 +164,46 @@ const NetworkContext = createContext<NetworkContextType | null>(null);
 
 export function NetworkProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<NetworkState>(loadState);
+  const { user } = useAuth();
+  const { currentUserRole } = usePermissions();
+  const isInitialMount = useRef(true);
+  const isSyncingFromCloud = useRef(false);
 
+  // ☁️ SYNC FROM CLOUD
+  useEffect(() => {
+    if (!user) return;
+
+    const docRef = doc(db, "data", "network");
+    const unsub = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const cloudData = snapshot.data() as NetworkState;
+        isSyncingFromCloud.current = true;
+        setStateInternal(cloudData);
+        saveState(cloudData); // Keeps local backup
+        setTimeout(() => { isSyncingFromCloud.current = false; }, 100);
+      }
+    });
+
+    return () => unsub();
+  }, [user]);
+
+  // ☁️ SYNC TO CLOUD
   const updateState = useCallback((updater: (prev: NetworkState) => NetworkState) => {
     setStateInternal((prev) => {
       const next = updater(prev);
       saveState(next);
+
+      // Only push to cloud if NOT currently receiving an update FROM cloud
+      // and if user has permission to edit
+      if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
+        setDoc(doc(db, "data", "network"), next).catch(err => {
+          console.error("Erro ao salvar no Firestore:", err);
+        });
+      }
+
       return next;
     });
-  }, []);
+  }, [currentUserRole]);
 
   const addMember = useCallback(
     (name: string, role: MemberRole, color: string) => {
@@ -267,11 +314,22 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
         members: newState.members || [],
         projects: newState.projects || [],
         assignments: newState.assignments || [],
+        settings: newState.settings || { autoBackupEnabled: false },
       };
       saveState(validatedState);
       setStateInternal(validatedState);
     },
     []
+  );
+
+  const updateSettings = useCallback(
+    (updates: Partial<AppSettings>) => {
+      updateState((s) => ({
+        ...s,
+        settings: { ...s.settings, ...updates },
+      }));
+    },
+    [updateState]
   );
 
   return (
@@ -288,6 +346,7 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
         removeAssignment,
         removeAssignmentByLink,
         setState,
+        updateSettings,
       }}
     >
       {children}

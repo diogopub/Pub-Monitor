@@ -1,5 +1,9 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { nanoid } from "nanoid";
+import { db } from "@/lib/firebase";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { useAuth } from "./AuthContext";
+import { usePermissions } from "./PermissionsContext";
 
 // ─── Activity Types with exact colors from reference ─────────────
 export interface ActivityType {
@@ -204,14 +208,42 @@ const ScheduleContext = createContext<ScheduleContextType | null>(null);
 
 export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<ScheduleState>(loadState);
+  const { user } = useAuth();
+  const { currentUserRole } = usePermissions();
+  const isSyncingFromCloud = useRef(false);
+
+  // ☁️ SYNC FROM CLOUD
+  useEffect(() => {
+    if (!user) return;
+
+    const docRef = doc(db, "data", "schedule");
+    const unsub = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const cloudData = snapshot.data() as ScheduleState;
+        isSyncingFromCloud.current = true;
+        setStateInternal(cloudData);
+        saveState(cloudData);
+        setTimeout(() => { isSyncingFromCloud.current = false; }, 100);
+      }
+    });
+
+    return () => unsub();
+  }, [user]);
 
   const updateState = useCallback((updater: (prev: ScheduleState) => ScheduleState) => {
     setStateInternal((prev) => {
       const next = updater(prev);
       saveState(next);
+
+      if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
+        setDoc(doc(db, "data", "schedule"), next).catch(err => {
+          console.error("Erro ao salvar schedule no Firestore:", err);
+        });
+      }
+
       return next;
     });
-  }, []);
+  }, [currentUserRole]);
 
   const addEntry = useCallback(
     (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string) => {

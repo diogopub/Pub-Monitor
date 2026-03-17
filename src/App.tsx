@@ -7,8 +7,17 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { NetworkProvider } from "./contexts/NetworkContext";
 import { ScheduleProvider } from "./contexts/ScheduleContext";
 import { ProjectCardsProvider } from "./contexts/ProjectCardsContext";
+import { AuthProvider } from "./contexts/AuthContext";
+import { PermissionsProvider } from "./contexts/PermissionsContext";
 import Home from "./pages/Home";
 import Configuracoes from "./pages/Configuracoes";
+import { useAutoBackup } from "./hooks/useAutoBackup";
+import { LoginMenu } from "./components/LoginMenu";
+
+function BackupManager() {
+  useAutoBackup();
+  return null;
+}
 
 function Router() {
   return (
@@ -25,9 +34,13 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <NetworkProvider>
+        <AuthProvider>
+          <PermissionsProvider>
+            <NetworkProvider>
           <ScheduleProvider>
             <ProjectCardsProvider>
+              <BackupManager />
+              <LoginMenu />
               <TooltipProvider>
                 <Toaster
                   theme="dark"
@@ -44,6 +57,8 @@ function App() {
             </ProjectCardsProvider>
           </ScheduleProvider>
         </NetworkProvider>
+          </PermissionsProvider>
+        </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
