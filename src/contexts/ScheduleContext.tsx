@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
+import { sanitizeForFirestore } from "@/lib/utils";
 
 // ─── Activity Types with exact colors from reference ─────────────
 export interface ActivityType {
@@ -236,7 +237,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
       saveState(next);
 
       if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
-        setDoc(doc(db, "data", "schedule"), next).catch(err => {
+        setDoc(doc(db, "data", "schedule"), sanitizeForFirestore(next)).catch(err => {
           console.error("Erro ao salvar schedule no Firestore:", err);
         });
       }

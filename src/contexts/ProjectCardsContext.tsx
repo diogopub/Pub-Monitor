@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
+import { sanitizeForFirestore } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────
 export interface ProjectDocument {
@@ -849,7 +850,7 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
       saveState(next);
 
       if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
-        setDoc(doc(db, "data", "cards"), next).catch(err => {
+        setDoc(doc(db, "data", "cards"), sanitizeForFirestore(next)).catch(err => {
           console.error("Erro ao salvar cards no Firestore:", err);
         });
       }

@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
+import { sanitizeForFirestore } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────
 export type MemberRole = "creative" | "architect" | "3d";
@@ -196,7 +197,7 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       // Only push to cloud if NOT currently receiving an update FROM cloud
       // and if user has permission to edit
       if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
-        setDoc(doc(db, "data", "network"), next).catch(err => {
+        setDoc(doc(db, "data", "network"), sanitizeForFirestore(next)).catch(err => {
           console.error("Erro ao salvar no Firestore:", err);
         });
       }
@@ -331,6 +332,13 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     },
     [updateState]
   );
+
+  // 🛡️ Ensure PUB INTERNO exists in projects for graph connections
+  useEffect(() => {
+    if (state.projects.length > 0 && !state.projects.some(p => p.name === "PUB INTERNO")) {
+      addProject("PUB INTERNO", "#ffffff");
+    }
+  }, [state.projects, addProject]);
 
   return (
     <NetworkContext.Provider
