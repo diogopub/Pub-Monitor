@@ -35,7 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       toast.success("Login realizado com sucesso!");
     } catch (error: any) {
       console.error("Erro ao fazer login:", error);
-      toast.error("Falha ao entrar com Google");
+      // More detailed error for debugging
+      const errorCode = error.code || "unknown";
+      toast.error(`Falha ao entrar com Google: ${errorCode}`);
+
+      if (errorCode === "auth/unauthorized-domain") {
+        console.error("ERRO: O domínio do Vercel não está autorizado no Console do Firebase.");
+      }
     }
   };
 
