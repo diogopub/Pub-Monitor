@@ -818,9 +818,24 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
     const unsub = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
         const cloudData = snapshot.data() as ProjectCardsState;
+        
+        // 🧪 Clean/Migrate cloud data
+        const cleanedCards = (cloudData.cards || []).map((c: any) => ({
+          ...c,
+          team: migrateTeam(c.team),
+          documents: Array.isArray(c.documents) ? c.documents : createDefaultDocuments(),
+          feed: Array.isArray(c.feed) ? c.feed : [],
+          timelinePins: Array.isArray(c.timelinePins) ? c.timelinePins.map((p: any) => ({
+            ...p,
+            labels: Array.isArray(p.labels) ? p.labels : (p.label ? [p.label] : ["ENTRADA"]),
+          })) : undefined,
+        }));
+
+        const cleanedData = { ...cloudData, cards: cleanedCards };
+
         isSyncingFromCloud.current = true;
-        setStateInternal(cloudData);
-        saveState(cloudData);
+        setStateInternal(cleanedData);
+        saveState(cleanedData);
         setTimeout(() => { isSyncingFromCloud.current = false; }, 100);
       }
     });
@@ -1043,6 +1058,20 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
     },
     [updateState]
   );
+
+  // 🛡️ Ensure PUB INTERNO exists
+  useEffect(() => {
+    if (state.cards.length > 0 && !state.cards.some(c => c.name === "PUB INTERNO")) {
+      console.log("Auto-criando PUB INTERNO...");
+      addCard({
+        name: "PUB INTERNO",
+        client: "INTERNO",
+        entryDate: new Date().toISOString().split('T')[0],
+        deliveryDate: new Date().toISOString().split('T')[0],
+        team: [],
+      });
+    }
+  }, [state.cards, addCard]);
 
   return (
     <ProjectCardsContext.Provider

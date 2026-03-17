@@ -375,10 +375,10 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
           </Popover>
         </div>
         <div className="space-y-1.5">
-          {card.team.map((member) => (
+          {(card.team || []).map((member) => (
             <TeamRow key={member.id} member={member} cardId={card.id} />
           ))}
-          {card.team.length === 0 && (
+          {(!card.team || card.team.length === 0) && (
             <p className="text-[10px] text-muted-foreground italic">Nenhum membro</p>
           )}
         </div>
