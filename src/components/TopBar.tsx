@@ -90,10 +90,12 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
     <div className="h-14 border-b border-border bg-card/60 backdrop-blur-md flex items-center px-3 sm:px-4 gap-2 sm:gap-4 shrink-0">
       {/* Logo */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shrink-0">
-          <span className="text-[10px] font-extrabold text-[#0f1729] font-heading tracking-wider">
-            PUB
-          </span>
+        <div className="w-8 h-8 rounded-md bg-white flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-white/10 transition-transform hover:scale-105">
+          <img 
+            src="/pub-logo.jpg" 
+            alt="PUB Logo" 
+            className="w-full h-full object-contain"
+          />
         </div>
         <div className="hidden sm:block">
           <h1 className="text-sm font-bold font-heading tracking-wide leading-tight">
