@@ -130,7 +130,7 @@ export default function DailyAllocationPanel({
   };
 
   // Removed fixed COL_WIDTH. We'll use percentage-based widths for 15 days.
-  const TIMELINE_Y = 130;
+  const TIMELINE_Y = 100;
   const SIDE_PADDING = 60; // Left padding for the [+] button area
 
   return (
@@ -199,7 +199,7 @@ export default function DailyAllocationPanel({
       <div className="flex-1 overflow-hidden">
         <div
           className="relative w-full h-full"
-          style={{ minHeight: "360px" }}
+          style={{ minHeight: "180px" }}
         >
           {/* Day Columns, Backgrounds, and Grid */}
           <div className="absolute inset-0 flex" style={{ paddingLeft: `${SIDE_PADDING}px` }}>
@@ -335,8 +335,8 @@ function TimelinePinElement({
   const colorHex =
     pin.color === "white" ? "#fff" : pin.color === "yellow" ? "#facc15" : "#ef4444";
 
-  const PIN_HEAD_H = 24; // px height of pin head rectangle
-  const PIN_STICK_H = 36; // px height of stick below head
+  const PIN_HEAD_H = 20; // px height of pin head rectangle
+  const PIN_STICK_H = 16; // px height of stick below head
 
   // Date label sits above pin head
   const dateTop = timelineY - PIN_HEAD_H - PIN_STICK_H - 20;
