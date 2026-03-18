@@ -29,6 +29,7 @@ export interface TimelinePin {
   color: "white" | "yellow" | "red";
   label?: string; // legacy
   labels: string[];
+  completedLabels?: boolean[];
 }
 
 export type ProjectStatus = "em-desenvolvimento" | "onboarding" | "standby" | "aguardando-retorno";
