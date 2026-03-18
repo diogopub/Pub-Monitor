@@ -48,12 +48,6 @@ export default function Home() {
         <SidePanel
           collapsed={sideCollapsed}
           onToggle={() => setSideCollapsed(!sideCollapsed)}
-          selectedNodeId={selectedNodeId}
-          selectedNodeType={selectedNodeType}
-          onClearSelection={() => {
-            setSelectedNodeId(null);
-            setSelectedNodeType(null);
-          }}
         />
         <div
           className="flex-1 relative"
