@@ -52,6 +52,7 @@ interface NetworkGraphProps {
   highlightMember?: string | null;
   highlightProject?: string | null;
   filterRole?: MemberRole | "all";
+  graphMode?: "agora" | "designado";
 }
 
 export default function NetworkGraph({
@@ -62,6 +63,7 @@ export default function NetworkGraph({
   highlightMember,
   highlightProject,
   filterRole = "all",
+  graphMode = "agora",
 }: NetworkGraphProps) {
   const { state, removeAssignmentByLink } = useNetwork();
   const { state: cardsState, updateTeamMember } = useProjectCards();
@@ -171,87 +173,123 @@ export default function NetworkGraph({
       });
     });
 
-    // --- AUTOMATIC CONNECTIONS BASED ON SCHEDULE ---
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
-    const todayDate = new Date(todayStr + "T12:00:00");
-    
-    // Period definition: Morning (before 14h) vs Afternoon (from 14h)
-    const isPM = now.getHours() >= 14;
-    
-    // Filter entries that are active in the current period of today
-    const todayEntries = scheduleState.entries.filter(e => {
-      if (!e.projectId) return false;
+    // --- CONNECTIONS LOGIC ---
+    if (graphMode === "agora") {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const todayStr = `${year}-${month}-${day}`;
+      const todayDate = new Date(todayStr + "T12:00:00");
       
-      const startDate = new Date(e.date + "T12:00:00");
-      const diffDays = Math.floor((todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Period definition: Morning (before 14h) vs Afternoon (from 14h)
+      const isPM = now.getHours() >= 14;
       
-      // If today is outside the range [start, start + duration)
-      if (diffDays < 0 || diffDays >= (e.duration || 1)) return false;
+      // Filter entries that are active in the current period of today
+      const todayEntries = scheduleState.entries.filter(e => {
+        if (!e.projectId) return false;
+        
+        const startDate = new Date(e.date + "T12:00:00");
+        const diffDays = Math.floor((todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // If today is outside the range [start, start + duration)
+        if (diffDays < 0 || diffDays >= (e.duration || 1)) return false;
 
-      // Calculate entry's relative interval for today [entryDayStart, entryDayEnd]
-      // Day range is [0.0, 1.0]
-      const entryDayStart = diffDays === 0 ? (e.startOffset || 0) : 0;
-      const entryDayEnd = entryDayStart + ((e.duration || 1) - diffDays);
+        // Calculate entry's relative interval for today [entryDayStart, entryDayEnd]
+        const entryDayStart = diffDays === 0 ? (e.startOffset || 0) : 0;
+        const entryDayEnd = entryDayStart + ((e.duration || 1) - diffDays);
 
-      if (isPM) {
-        // Afternoon period: [0.5, 1.0]
-        // Entry is visible if it overlaps with [0.5, 1.0]
-        return entryDayEnd > 0.5;
-      } else {
-        // Morning period: [0.0, 0.5]
-        return entryDayStart < 0.5;
-      }
-    });
+        if (isPM) {
+          return entryDayEnd > 0.5;
+        } else {
+          return entryDayStart < 0.5;
+        }
+      });
 
-    // Map schedule entries to project slots and links
-    todayEntries.forEach(entry => {
-      // Find nodes directly from the nodes array to ensure valid D3 links
-      const memberNode = nodes.find(n => n.id === entry.memberId && n.type === "member");
-      
-      // Special check for PUB INTERNO -> connects to hub
-      const isPubInterno = entry.projectId === pubInternoId;
-      const projNode = isPubInterno 
-        ? nodes.find(n => n.id === "hub")
-        : nodes.find(n => n.id === entry.projectId && n.type === "project");
-      
-      if (!memberNode || !projNode) return;
+      // Map schedule entries to project slots and links
+      todayEntries.forEach(entry => {
+        const memberNode = nodes.find(n => n.id === entry.memberId && n.type === "member");
+        const isPubInterno = entry.projectId === pubInternoId;
+        const projNode = isPubInterno 
+          ? nodes.find(n => n.id === "hub")
+          : nodes.find(n => n.id === entry.projectId && n.type === "project");
+        
+        if (!memberNode || !projNode) return;
 
-      // Add member slot to project (if not already added for this project)
-      // Hub also has slots? No, let's only add for regular projects for now
-      // unless user wants them in the central PUB too.
-      if (projNode.type === "project" && projNode.memberSlots) {
-        const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
-        if (!alreadyAdded) {
-          projNode.memberSlots.push({
-            role: memberNode.role!,
+        if (projNode.type === "project" && projNode.memberSlots) {
+          const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
+          if (!alreadyAdded) {
+            projNode.memberSlots.push({
+              role: memberNode.role!,
+              color: memberNode.color,
+              name: memberNode.label
+            });
+          }
+        }
+
+        const linkId = `${memberNode.id}-${entry.projectId}`;
+        if (!addedLinkIds.has(linkId)) {
+          addedLinkIds.add(linkId);
+          links.push({
+            id: linkId,
+            source: memberNode.id,
+            target: projNode.id,
             color: memberNode.color,
-            name: memberNode.label
+            memberId: memberNode.id,
+            projectId: entry.projectId as string,
           });
         }
-      }
+      });
+    } else {
+      // "designado" mode
+      cardsState.cards.forEach(card => {
+        // Only active projects (or PUB INTERNO) will attach links
+        if (card.active === false) return;
+        
+        const isPubInterno = card.id === pubInternoId;
+        const projNode = isPubInterno
+          ? nodes.find(n => n.id === "hub")
+          : nodes.find(n => n.id === card.id && n.type === "project");
 
-      // Create link (avoid duplicates for the same member-project pair)
-      // Use the original projectId for the link, even if it connects to the hub
-      const linkId = `${memberNode.id}-${entry.projectId}`;
-      if (!addedLinkIds.has(linkId)) {
-        addedLinkIds.add(linkId);
-        links.push({
-          id: linkId,
-          source: memberNode.id,
-          target: projNode.id, // Target is the actual node (hub or project)
-          color: memberNode.color,
-          memberId: memberNode.id,
-          projectId: entry.projectId as string, // Cast to string since it's guarded by filter
-        });
-      }
-    });
+        if (!projNode) return;
+
+        if (card.team && Array.isArray(card.team)) {
+          card.team.forEach(tm => {
+            // Match team member by name since IDs might be from project card internal roster
+            const teamMemberNameUppercase = tm.name.toUpperCase();
+            const memberNode = nodes.find(n => n.label === teamMemberNameUppercase && n.type === "member");
+            if (!memberNode) return;
+
+            if (projNode.type === "project" && projNode.memberSlots) {
+              const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
+              if (!alreadyAdded) {
+                projNode.memberSlots.push({
+                  role: memberNode.role!,
+                  color: memberNode.color,
+                  name: memberNode.label
+                });
+              }
+            }
+
+            const linkId = `${memberNode.id}-${card.id}`;
+            if (!addedLinkIds.has(linkId)) {
+              addedLinkIds.add(linkId);
+              links.push({
+                id: linkId,
+                source: memberNode.id,
+                target: projNode.id,
+                color: memberNode.color,
+                memberId: memberNode.id,
+                projectId: card.id,
+              });
+            }
+          });
+        }
+      });
+    }
 
     return { nodes, links };
-  }, [state, cardsState, scheduleState, filterRole]);
+  }, [state, cardsState, scheduleState, filterRole, graphMode]);
 
   useEffect(() => {
     const svg = d3.select(svgRef.current);

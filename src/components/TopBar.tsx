@@ -19,9 +19,11 @@ import { useLocation, Link } from "wouter";
 interface TopBarProps {
   filterRole?: MemberRole | "all";
   onFilterChange?: (role: MemberRole | "all") => void;
+  graphMode?: "agora" | "designado";
+  onGraphModeChange?: (mode: "agora" | "designado") => void;
 }
 
-export default function TopBar({ filterRole, onFilterChange }: TopBarProps) {
+export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphModeChange }: TopBarProps) {
   const { state: networkState, setState: setNetworkState } = useNetwork();
   const { state: scheduleState, setState: setScheduleState } = useSchedule();
   const { state: cardsState, setState: setCardsState } = useProjectCards();
@@ -126,6 +128,34 @@ export default function TopBar({ filterRole, onFilterChange }: TopBarProps) {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Graph Mode Toggle */}
+      {graphMode && onGraphModeChange && (
+        <div className="hidden sm:flex bg-black/40 border border-white/10 rounded-md p-0.5 shadow-sm mr-2 shrink-0">
+          <button
+            onClick={() => onGraphModeChange("agora")}
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all ${
+              graphMode === "agora" 
+                ? "bg-primary text-primary-foreground shadow-md scale-100" 
+                : "text-white/40 hover:text-white scale-95"
+            }`}
+            title="Mostra as conexões de acordo com a agenda neste momento"
+          >
+            Agora
+          </button>
+          <button
+            onClick={() => onGraphModeChange("designado")}
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-sm transition-all ${
+              graphMode === "designado" 
+                ? "bg-primary text-primary-foreground shadow-md scale-100" 
+                : "text-white/40 hover:text-white scale-95"
+            }`}
+            title="Mostra todas as conexões cadastradas no card do projeto"
+          >
+            Designado
+          </button>
+        </div>
+      )}
 
       {/* Filter — only on Painel */}
       {filterRole !== undefined && onFilterChange && (

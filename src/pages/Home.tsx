@@ -18,6 +18,7 @@ export default function Home() {
     "member" | "project" | null
   >(null);
   const [filterRole, setFilterRole] = useState<MemberRole | "all">("all");
+  const [graphMode, setGraphMode] = useState<"agora" | "designado">("agora");
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null);
 
@@ -37,7 +38,12 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <TopBar filterRole={filterRole} onFilterChange={setFilterRole} />
+      <TopBar 
+        filterRole={filterRole} 
+        onFilterChange={setFilterRole} 
+        graphMode={graphMode}
+        onGraphModeChange={setGraphMode}
+      />
       <div className="flex-1 flex overflow-hidden">
         <SidePanel
           collapsed={sideCollapsed}
@@ -74,6 +80,7 @@ export default function Home() {
                 selectedNodeType === "project" ? selectedNodeId : null
               }
               filterRole={filterRole}
+              graphMode={graphMode}
             />
           </div>
           <WorkloadBar />
