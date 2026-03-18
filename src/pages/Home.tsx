@@ -73,7 +73,11 @@ export default function Home() {
             />
           </div>
           <WorkloadBar />
-          <ScheduleFooter hoveredProjectId={hoveredProjectId} highlightMemberId={hoveredMemberId} />
+          <ScheduleFooter 
+            hoveredProjectId={hoveredProjectId} 
+            selectedProjectId={selectedNodeType === "project" ? selectedNodeId : null}
+            highlightMemberId={hoveredMemberId} 
+          />
         </div>
       </div>
     </div>

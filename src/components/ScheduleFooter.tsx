@@ -72,10 +72,11 @@ function formatDayHeader(d: Date): { day: string; weekday: string } {
 
 interface ScheduleFooterProps {
   hoveredProjectId?: string | null;
+  selectedProjectId?: string | null;
   highlightMemberId?: string | null;
 }
 
-export default function ScheduleFooter({ hoveredProjectId, highlightMemberId }: ScheduleFooterProps) {
+export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, highlightMemberId }: ScheduleFooterProps) {
   const { state: networkState } = useNetwork();
   const { state: scheduleState, getEntriesForCell } = useSchedule();
   const { state: cardsState } = useProjectCards();
@@ -97,9 +98,10 @@ export default function ScheduleFooter({ hoveredProjectId, highlightMemberId }: 
     }));
   }, [networkState.members]);
 
-  // Find hovered project card
-  const hoveredCard = hoveredProjectId
-    ? cardsState.cards.find((c) => c.id === hoveredProjectId)
+  // Find hovered or selected project card
+  const activeProjectId = selectedProjectId || hoveredProjectId;
+  const activeCard = activeProjectId
+    ? cardsState.cards.find((c) => c.id === activeProjectId)
     : null;
 
   return (
@@ -115,22 +117,22 @@ export default function ScheduleFooter({ hoveredProjectId, highlightMemberId }: 
           <ChevronUp className="w-3.5 h-3.5 text-white/50" />
         )}
         <span className="text-[10px] text-white/40 ml-1.5 uppercase tracking-wider font-medium">
-          {hoveredCard ? `Timeline — ${hoveredCard.name}` : "Agenda"}
+          {activeCard ? `Timeline — ${activeCard.name}` : "Agenda"}
         </span>
       </button>
 
       {expanded && (
         <div className="bg-black/15 backdrop-blur-md border-t border-white/5">
-          {hoveredCard ? (
-            /* ─── Diárias panel for hovered project ─── */
-            <div className="p-1 w-full" style={{ height: '400px' }}>
+          {activeCard ? (
+            /* ─── Diárias panel for active project ─── */
+            <div className="p-1 w-full max-h-[50vh] overflow-y-auto">
               <DailyAllocationPanel
-                cardId={hoveredCard.id}
-                cardName={hoveredCard.name}
-                entryDate={hoveredCard.entryDate}
-                deliveryDate={hoveredCard.deliveryDate}
-                allocations={hoveredCard.dailyAllocations || {}}
-                timelinePins={hoveredCard.timelinePins || []}
+                cardId={activeCard.id}
+                cardName={activeCard.name}
+                entryDate={activeCard.entryDate}
+                deliveryDate={activeCard.deliveryDate}
+                allocations={activeCard.dailyAllocations || {}}
+                timelinePins={activeCard.timelinePins || []}
                 onClose={() => {}}
               />
             </div>
