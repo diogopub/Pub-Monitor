@@ -26,7 +26,7 @@ export default function Home() {
     nodeId: string,
     nodeType: "member" | "project" | "hub"
   ) => {
-    if (nodeType === "hub") return;
+    if (nodeType === "hub" || nodeType === "member") return;
     if (selectedNodeId === nodeId) {
       setSelectedNodeId(null);
       setSelectedNodeType(null);
