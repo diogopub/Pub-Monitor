@@ -46,6 +46,7 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
 
 interface NetworkGraphProps {
   onNodeClick?: (nodeId: string, nodeType: "member" | "project" | "hub") => void;
+  onBackgroundClick?: () => void;
   onProjectHover?: (projectId: string | null) => void;
   onMemberHover?: (memberId: string | null) => void;
   highlightMember?: string | null;
@@ -55,6 +56,7 @@ interface NetworkGraphProps {
 
 export default function NetworkGraph({
   onNodeClick,
+  onBackgroundClick,
   onProjectHover,
   onMemberHover,
   highlightMember,
@@ -73,6 +75,8 @@ export default function NetworkGraph({
   onMemberHoverRef.current = onMemberHover;
   const onNodeClickRef = useRef(onNodeClick);
   onNodeClickRef.current = onNodeClick;
+  const onBackgroundClickRef = useRef(onBackgroundClick);
+  onBackgroundClickRef.current = onBackgroundClick;
   const [dimensions, setDimensions] = useState({ width: 900, height: 600 });
   const [, setTick] = useState(0); // Dummy state to force refresh
 
@@ -307,6 +311,12 @@ export default function NetworkGraph({
       });
     svg.call(zoom as any);
 
+    svg.on("click", () => {
+      if (onBackgroundClickRef.current) {
+        onBackgroundClickRef.current();
+      }
+    });
+
     // Curved links
     const linkGroup = g.append("g").attr("class", "links");
     const linkElements = linkGroup
@@ -399,6 +409,7 @@ export default function NetworkGraph({
       .join("g")
       .attr("cursor", "pointer")
       .on("click", (_event, d) => {
+        _event.stopPropagation();
         if (onNodeClickRef.current && d.type !== "hub") {
           onNodeClickRef.current(d.id, d.type as "member" | "project");
         }

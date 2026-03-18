@@ -61,6 +61,10 @@ export default function Home() {
           <div className="absolute inset-0">
             <NetworkGraph
               onNodeClick={handleNodeClick}
+              onBackgroundClick={() => {
+                setSelectedNodeId(null);
+                setSelectedNodeType(null);
+              }}
               onProjectHover={setHoveredProjectId}
               onMemberHover={setHoveredMemberId}
               highlightMember={
