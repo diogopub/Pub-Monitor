@@ -128,7 +128,7 @@ export default function SidePanel({
           <Activity className="w-4 h-4 text-muted-foreground" />
         </div>
       ) : (
-        <div className="h-full bg-card/80 backdrop-blur-md border-r border-border flex flex-col overflow-hidden">
+        <div className="min-h-0 h-full bg-card/80 backdrop-blur-md border-r border-border flex flex-col overflow-hidden">
           <div className="p-4 border-b border-border bg-black/20">
             <h2 className="text-sm font-semibold font-heading tracking-wide text-foreground flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-primary" />
@@ -140,7 +140,7 @@ export default function SidePanel({
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent pr-1">
+          <div className="flex-1 overflow-y-auto pr-1">
             <div className="p-4 space-y-6">
               {sortedDates.length === 0 ? (
                 <div className="text-center text-xs text-muted-foreground p-8 bg-black/20 rounded-lg border border-white/5">

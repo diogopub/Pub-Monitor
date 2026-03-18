@@ -150,18 +150,20 @@
     filter: drop-shadow(0 0 16px currentColor);
   }
 
-  /* Scrollbar styling */
+  /* Scrollbar styling - Prominent for usability */
   ::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
-    background: oklch(0.14 0.025 260);
+    background: oklch(0.12 0.02 260);
   }
   ::-webkit-scrollbar-thumb {
-    background: oklch(0.30 0.02 260);
-    border-radius: 3px;
+    background: oklch(0.40 0.03 260);
+    border-radius: 4px;
+    border: 2px solid oklch(0.12 0.02 260);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.40 0.02 260);
+    background: var(--color-primary);
   }
 }
