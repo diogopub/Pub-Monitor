@@ -382,49 +382,13 @@ export default function NetworkGraph({
       .attr("stroke-width", 20)
       .attr("cursor", "pointer");
 
-    // Delete button group (hidden by default)
-    const deleteButtons = linkElements
-      .append("g")
-      .attr("class", "delete-btn")
-      .attr("opacity", 0)
-      .attr("cursor", "pointer")
-      .on("click", (_event, d) => {
-        _event.stopPropagation();
-        // Clear the team member name in the project card
-        if (d.cardTeamMemberId && d.cardId) {
-          updateTeamMember(d.cardId, d.cardTeamMemberId, "");
-        }
-        removeAssignmentByLink(d.memberId, d.projectId);
-      });
-
-    deleteButtons
-      .append("circle")
-      .attr("r", 9)
-      .attr("fill", "rgba(220, 38, 38, 0.9)")
-      .attr("stroke", "rgba(255,255,255,0.3)")
-      .attr("stroke-width", 1);
-
-    deleteButtons
-      .append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "0.35em")
-      .attr("fill", "#ffffff")
-      .attr("font-size", "13px")
-      .attr("font-weight", "700")
-      .attr("font-family", "Sora, sans-serif")
-      .text("−");
-
-    // Hover: show/hide delete button
+    // Hover: path highlight only
     linkElements
       .on("mouseenter", function () {
-        d3.select(this).select(".delete-btn")
-          .transition().duration(150).attr("opacity", 1);
         d3.select(this).select(".link-path")
           .transition().duration(150).attr("stroke-width", 4).attr("stroke-opacity", 0.9);
       })
       .on("mouseleave", function () {
-        d3.select(this).select(".delete-btn")
-          .transition().duration(150).attr("opacity", 0);
         d3.select(this).select(".link-path")
           .transition().duration(150).attr("stroke-width", 2).attr("stroke-opacity", 0.5);
       });
@@ -772,21 +736,6 @@ export default function NetworkGraph({
     simulation.on("tick", () => {
       linkPaths.attr("d", linkPath);
       linkHitAreas.attr("d", linkPath);
-      // Position delete button on the actual curved path
-      deleteButtons.each(function (d: GraphLink) {
-        const pathEl = linkPaths
-          .filter((l: GraphLink) => l.id === d.id)
-          .node() as SVGPathElement | null;
-        if (pathEl) {
-          try {
-            const len = pathEl.getTotalLength();
-            const point = pathEl.getPointAtLength(len * 0.5);
-            d3.select(this).attr("transform", `translate(${point.x},${point.y})`);
-          } catch {
-            // path not ready
-          }
-        }
-      });
       nodeElements.attr("transform", (d) => `translate(${d.x},${d.y})`);
     });
 
