@@ -155,7 +155,7 @@ export interface ScheduleState {
 
 interface ScheduleContextType {
   state: ScheduleState;
-  addEntry: (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string) => void;
+  addEntry: (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number) => void;
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => void;
   removeEntry: (id: string) => void;
   removeEntriesByCell: (memberId: string, date: string) => void;
@@ -247,7 +247,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   }, [currentUserRole]);
 
   const addEntry = useCallback(
-    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string) => {
+    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number) => {
       updateState((s) => {
         const memberEntries = s.entries.filter(e => e.memberId === memberId);
         const takenSlots = new Set<number>();
@@ -264,12 +264,25 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
           }
         });
 
-        let slotIndex = 0;
-        while (takenSlots.has(slotIndex) && slotIndex < 3) slotIndex++;
+        let autoSlot = 0;
+        while (takenSlots.has(autoSlot) && autoSlot < 3) autoSlot++;
 
         return {
           ...s,
-          entries: [...s.entries, { id: nanoid(8), memberId, date, activityId, projectId, customLabel, duration: 1, slotIndex, startOffset: 0 }],
+          entries: [
+            ...s.entries, 
+            { 
+              id: nanoid(8), 
+              memberId, 
+              date, 
+              activityId, 
+              projectId, 
+              customLabel, 
+              duration: duration ?? 1, 
+              slotIndex: slotIndex ?? autoSlot, 
+              startOffset: startOffset ?? 0 
+            }
+          ],
         };
       });
     },

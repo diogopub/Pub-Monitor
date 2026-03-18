@@ -388,7 +388,7 @@ function ScheduleCell({
   date: string;
   isEntradaEntrega?: boolean;
 }) {
-  const { getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
+  const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"activity" | "project">("activity");
@@ -403,7 +403,7 @@ function ScheduleCell({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -428,13 +428,31 @@ function ScheduleCell({
       if (targetSlot < 0) targetSlot = 0;
       if (targetSlot > 2) targetSlot = 2; // Up to 3 slots
 
+      const isCopy = e.altKey;
+
       if (data.entryId && (data.sourceMemberId !== memberId || data.sourceDate !== date || data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset)) {
-        updateEntry(data.entryId, {
-          memberId: memberId,
-          date: date,
-          slotIndex: targetSlot,
-          startOffset: targetOffset
-        });
+        if (isCopy) {
+          const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
+          if (sourceEntry) {
+            addEntry(
+              memberId,
+              date,
+              sourceEntry.activityId,
+              sourceEntry.projectId,
+              sourceEntry.customLabel,
+              sourceEntry.duration,
+              targetSlot,
+              targetOffset
+            );
+          }
+        } else {
+          updateEntry(data.entryId, {
+            memberId: memberId,
+            date: date,
+            slotIndex: targetSlot,
+            startOffset: targetOffset
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to parse drop target", err);
