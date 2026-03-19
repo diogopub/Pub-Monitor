@@ -64,6 +64,49 @@ export function LoginMenu() {
     );
   }
 
+  // If logged in but not authorized
+  // An admin must add their email to the authorized users list
+  if (!currentUserRole) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4">
+        {/* Layer de vidro jateado / Frosted glass background */}
+        <div className="absolute inset-0 bg-background/30 backdrop-blur-md" />
+        
+        {/* Caixa de Aviso Centralizada */}
+        <div className="relative z-10 w-full max-w-sm space-y-6 bg-card/80 backdrop-blur-xl border border-border/50 shadow-2xl rounded-2xl p-8 text-center animate-in fade-in zoom-in-95 duration-500">
+          <div className="flex flex-col items-center gap-4 text-yellow-500">
+            <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20">
+              <ShieldAlert className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-bold uppercase tracking-widest font-heading">
+              Acesso Restrito
+            </h2>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-foreground">
+              {user.email}
+            </p>
+            <p className="text-sm text-center text-muted-foreground leading-relaxed">
+              Você está logado, mas seu e-mail ainda não possui permissão para acessar o Monitor.
+            </p>
+            <p className="text-xs text-center text-muted-foreground mt-2 border-t border-border pt-4">
+              Solicite acesso a um Administrador informando seu e-mail.
+            </p>
+          </div>
+          
+          <Button 
+            variant="outline"
+            className="w-full gap-2 text-xs border-border mt-4"
+            onClick={logout}
+          >
+            <LogOut className="w-4 h-4" />
+            Sair e tentar outra conta
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed bottom-20 right-4 z-50">
       <Popover>
