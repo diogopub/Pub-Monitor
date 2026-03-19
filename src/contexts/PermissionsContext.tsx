@@ -99,8 +99,12 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   };
 
   const requestAccess = async (userData: { email: string; name?: string; photoURL?: string }) => {
+    // Check if already authorized
+    const isAuth = authorizedUsers.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
+    if (isAuth) return;
+
     // Check if already requested
-    const alreadyPending = pendingUsers.find(u => u.email === userData.email);
+    const alreadyPending = pendingUsers.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
     if (alreadyPending) return;
 
     const newList = [...pendingUsers, {
