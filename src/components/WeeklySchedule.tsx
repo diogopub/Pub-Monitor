@@ -3,7 +3,7 @@
  * Linhas: membros da equipe + linhas especiais (freelancers, entradas/entregas)
  * Colunas: dias da semana (seg-sex) com navegação
  */
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork, ROLE_COLORS, type MemberRole } from "@/contexts/NetworkContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -743,16 +743,31 @@ function EditMemberPopover({
 }
 
 // ─── Add Member Popover ──────────────────────────────────────────
-function AddMemberPopover() {
-  const { addMember } = useNetwork();
+function AddMemberPopover({ weekKey, weekRosterIds }: { weekKey: string; weekRosterIds: string[] }) {
+  const { addMember, state: networkState } = useNetwork();
+  const { setWeekRoster } = useSchedule();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("creative");
   const [color, setColor] = useState(ROLE_COLORS.creative);
+  // Ref sinaliza que queremos adicionar o próximo novo membro à semana
+  const pendingAdd = useRef(false);
+
+  // Quando networkState.members mudar e tivermos um addMember pendente,
+  // pega o membro mais novo e adiciona ao roster da semana
+  useEffect(() => {
+    if (!pendingAdd.current) return;
+    pendingAdd.current = false;
+    const newest = networkState.members[networkState.members.length - 1];
+    if (newest && !weekRosterIds.includes(newest.id)) {
+      setWeekRoster(weekKey, [...weekRosterIds, newest.id]);
+    }
+  }, [networkState.members]);
 
   const handleAdd = () => {
     if (!name.trim()) return;
+    pendingAdd.current = true; // sinaliza antes de disparar o addMember
     addMember(name.trim(), role, color, email.trim() || undefined);
     setName("");
     setEmail("");
@@ -977,15 +992,7 @@ export default function WeeklySchedule() {
           <thead>
             <tr>
               <th className="w-[120px] text-left px-3 py-2 text-[10px] border-b border-border bg-card/40 sticky left-0 z-10">
-                <div className="flex items-center gap-2">
-                  <AddMemberToWeekPopover
-                    weekKey={weekKey}
-                    currentRoster={weekRosterIds}
-                    allMembers={networkState.members}
-                  />
-                  <div className="h-3 w-[1px] bg-border" />
-                  <AddMemberPopover />
-                </div>
+                <AddMemberPopover weekKey={weekKey} weekRosterIds={weekRosterIds} />
               </th>
               {weekDays.map((day) => {
                 const { day: dayNum, weekday } = formatDayHeader(day);
