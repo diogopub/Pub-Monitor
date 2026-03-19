@@ -186,6 +186,16 @@ function ProjectPicker({
     );
   }
 
+  // Ordenar alfabeticamente
+  const sortedProjects = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+
+  // Separar PUB INTERNO
+  const pubInternoIndex = sortedProjects.findIndex(p => p.name.toUpperCase() === "PUB INTERNO");
+  let pubInternoProject = null;
+  if (pubInternoIndex !== -1) {
+    pubInternoProject = sortedProjects.splice(pubInternoIndex, 1)[0];
+  }
+
   return (
     <div className="w-56">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
@@ -222,14 +232,18 @@ function ProjectPicker({
           >
             ✏️ Personalizado
           </button>
-          {/* Option without project */}
-          <button
-            onClick={() => onSelect("")}
-            className="w-full text-left px-2.5 py-1.5 rounded-md text-xs text-muted-foreground hover:bg-accent/50 transition-colors"
-          >
-            Sem projeto
-          </button>
-          {filtered.map((proj) => (
+          
+          {/* PUB INTERNO fixado */}
+          {pubInternoProject && (
+            <button
+              onClick={() => onSelect(pubInternoProject.id)}
+              className="w-full text-left px-2.5 py-1.5 rounded-md text-xs font-semibold bg-accent/30 hover:bg-accent/50 transition-colors text-foreground border border-border/50"
+            >
+              🏢 PUB INTERNO
+            </button>
+          )}
+
+          {sortedProjects.map((proj) => (
             <button
               key={proj.id}
               onClick={() => onSelect(proj.id)}
@@ -238,7 +252,7 @@ function ProjectPicker({
               {proj.name}
             </button>
           ))}
-          {filtered.length === 0 && (
+          {sortedProjects.length === 0 && !pubInternoProject && (
             <p className="text-xs text-muted-foreground px-2.5 py-2">
               Nenhum projeto encontrado
             </p>
