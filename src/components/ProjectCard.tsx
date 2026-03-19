@@ -2,7 +2,7 @@
  * ProjectCard — Card individual de projeto
  * Feed, prazo, equipe, documentos com toggle
  */
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   useProjectCards,
@@ -195,9 +195,23 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
   const daysToEntry = calcDaysFromNow(card.entryDate);
   const daysToDelivery = calcDaysFromNow(card.deliveryDate);
 
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(card.name);
+
+  useEffect(() => {
+    if (!isEditingName) setEditedName(card.name);
+  }, [card.name, isEditingName]);
+
   const handleSaveDates = () => {
     updateCard(card.id, { entryDate, deliveryDate });
     setEditingDates(false);
+  };
+
+  const handleSaveName = () => {
+    if (editedName.trim() && editedName !== card.name) {
+      updateCard(card.id, { name: editedName.trim() });
+    }
+    setIsEditingName(false);
   };
 
   const allFeed = card.feed;
@@ -238,9 +252,33 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       <div className="px-3 py-2 border-b border-border bg-primary/5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-xs font-bold font-heading uppercase tracking-wide text-foreground">
-              {card.name}
-            </h3>
+            <div className="flex items-center gap-1 group/name">
+              {isEditingName ? (
+                <Input
+                  className="h-6 text-xs font-bold py-0 bg-background/50 border-primary/50 uppercase"
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value.toUpperCase())}
+                  onBlur={handleSaveName}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveName();
+                    if (e.key === "Escape") { setEditedName(card.name); setIsEditingName(false); }
+                  }}
+                  autoFocus
+                />
+              ) : (
+                <>
+                  <h3 className="text-xs font-bold font-heading uppercase tracking-wide text-foreground">
+                    {card.name}
+                  </h3>
+                  <button 
+                    onClick={() => setIsEditingName(true)}
+                    className="opacity-0 group-hover/name:opacity-100 transition-opacity p-0.5 hover:bg-accent/50 rounded"
+                  >
+                    <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
+                  </button>
+                </>
+              )}
+            </div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <Switch
                 checked={card.active !== false}
