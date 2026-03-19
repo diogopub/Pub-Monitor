@@ -432,7 +432,7 @@ function ScheduleCell({
   const pushToCalendar = async (
     entryDate: string,
     duration: number,
-    slotIdx: number,
+    startOffset: number,   // 0 = manhã (esquerda), 0.5 = tarde (direita)
     membId: string,
     projectId?: string,
     customLabel?: string
@@ -443,7 +443,7 @@ function ScheduleCell({
     if (!googleAccessToken || !memberEmail || !projectName) return [];
     try {
       return await pushEventToGoogleCalendar(
-        { startDate: entryDate, duration, slotIndex: slotIdx },
+        { startDate: entryDate, duration, startOffset },
         projectName,
         memberEmail,
         googleAccessToken
@@ -461,10 +461,11 @@ function ScheduleCell({
     // Gera ID antecipadamente para poder salvar os IDs do GCal de volta
     const newId = nanoidLocal();
     const autoSlot = entries.length;
+    // Cria com startOffset=0 → sempre manhã quando adicionado pelo popover
     addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 0.5, autoSlot, 0, newId);
 
-    // Push imediato ao Google Calendar
-    const googleIds = await pushToCalendar(date, 0.5, autoSlot, memberId, projectId, customLabel);
+    // Push imediato ao Google Calendar (startOffset=0 → manhã)
+    const googleIds = await pushToCalendar(date, 0.5, 0, memberId, projectId, customLabel);
     if (googleIds.length > 0) {
       updateEntry(newId, { googleEventIds: googleIds });
     }
@@ -503,7 +504,7 @@ function ScheduleCell({
         // Cópia: criar nova entry + novo evento no Calendar
         const newId = nanoidLocal();
         addEntry(memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, sourceEntry.duration, targetSlot, targetOffset, newId);
-        pushToCalendar(date, sourceEntry.duration || 1, targetSlot, memberId, sourceEntry.projectId, sourceEntry.customLabel)
+        pushToCalendar(date, sourceEntry.duration || 0.5, targetOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
           .then(googleIds => { if (googleIds.length > 0) updateEntry(newId, { googleEventIds: googleIds }); });
       } else {
         // Mover: deletar eventos antigos, criar novos
@@ -511,7 +512,7 @@ function ScheduleCell({
           deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, googleAccessToken).catch(console.error);
         }
         updateEntry(data.entryId, { memberId, date, slotIndex: targetSlot, startOffset: targetOffset, googleEventIds: [] });
-        pushToCalendar(date, sourceEntry.duration || 1, targetSlot, memberId, sourceEntry.projectId, sourceEntry.customLabel)
+        pushToCalendar(date, sourceEntry.duration || 0.5, targetOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
           .then(googleIds => { if (googleIds.length > 0) updateEntry(data.entryId, { googleEventIds: googleIds }); });
       }
     } catch (err) {
@@ -538,10 +539,10 @@ function ScheduleCell({
       updateEntry(entryId, { ...updates, googleEventIds: [] });
       // Criar novos eventos com os dados atualizados
       const newDate = updates.date ?? entry.date;
-      const newDuration = updates.duration ?? entry.duration ?? 1;
-      const newSlot = updates.slotIndex ?? entry.slotIndex ?? 0;
+      const newDuration = updates.duration ?? entry.duration ?? 0.5;
+      const newStartOffset = updates.startOffset ?? entry.startOffset ?? 0;
       const newMemberId = updates.memberId ?? entry.memberId;
-      const googleIds = await pushToCalendar(newDate, newDuration, newSlot, newMemberId, entry.projectId, entry.customLabel);
+      const googleIds = await pushToCalendar(newDate, newDuration, newStartOffset, newMemberId, entry.projectId, entry.customLabel);
       if (googleIds.length > 0) {
         updateEntry(entryId, { googleEventIds: googleIds });
       }

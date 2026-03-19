@@ -17,7 +17,7 @@ function nextWeekday(dateStr: string): string {
 }
 
 export async function pushEventToGoogleCalendar(
-  entry: { startDate: string; duration?: number; slotIndex?: number },
+  entry: { startDate: string; duration?: number; startOffset?: number },
   projectName: string,
   memberEmail: string,
   token: string
@@ -27,7 +27,8 @@ export async function pushEventToGoogleCalendar(
   const TZ = "America/Sao_Paulo";
 
   const duration = entry.duration ?? 1;
-  const slotIndex = entry.slotIndex ?? 0;
+  // startOffset 0 = esquerda = manhã, 0.5 = direita = tarde
+  const startsInAfternoon = (entry.startOffset ?? 0) >= 0.5;
 
   // Quantidade de períodos a criar (máx. 10 = segunda a sexta, manhã + tarde)
   // duration=0.5 → 1 período, duration=1.0 → 2, duration=1.5 → 3 ...
@@ -36,8 +37,8 @@ export async function pushEventToGoogleCalendar(
   const MORNING   = { start: "10:00:00", end: "13:00:00" };
   const AFTERNOON = { start: "14:00:00", end: "19:00:00" };
 
-  // Estado inicial: slot 0 → começa de manhã, slot ≥ 1 → começa de tarde
-  let isAfternoon = slotIndex >= 1;
+  // Estado inicial: startOffset 0 → manhã, 0.5 → tarde
+  let isAfternoon = startsInAfternoon;
   let currentDateStr = entry.startDate;
 
   for (let p = 0; p < numPeriods; p++) {
