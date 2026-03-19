@@ -544,19 +544,20 @@ function EditMemberPopover({
   member,
   children,
 }: {
-  member: { id: string; name: string; color: string; type: string };
+  member: { id: string; name: string; color: string; type: string; email?: string };
   children: React.ReactNode;
 }) {
   const { updateMember, removeMember } = useNetwork();
   const [name, setName] = useState(member.name);
   const [color, setColor] = useState(member.color);
+  const [email, setEmail] = useState(member.email || "");
   const [open, setOpen] = useState(false);
 
   if (member.type !== "member") return <>{children}</>;
 
   const handleSave = () => {
     if (name.trim()) {
-      updateMember(member.id, { name: name.trim(), color });
+      updateMember(member.id, { name: name.trim(), color, email: email.trim() || undefined });
     }
     setOpen(false);
   };
@@ -564,7 +565,7 @@ function EditMemberPopover({
   return (
     <Popover open={open} onOpenChange={(o) => {
       setOpen(o);
-      if (o) { setName(member.name); setColor(member.color); }
+      if (o) { setName(member.name); setColor(member.color); setEmail(member.email || ""); }
     }}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent className="w-52 p-3 space-y-3" side="right" align="start">
@@ -574,6 +575,16 @@ function EditMemberPopover({
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="h-7 text-xs"
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">E-mail (opcional)</label>
+          <Input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-7 text-xs"
+            placeholder="email@pub.com"
             onKeyDown={(e) => e.key === "Enter" && handleSave()}
           />
         </div>
@@ -617,20 +628,22 @@ function AddMemberPopover() {
   const { addMember } = useNetwork();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("creative");
   const [color, setColor] = useState(ROLE_COLORS.creative);
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    addMember(name.trim(), role, color);
+    addMember(name.trim(), role, color, email.trim() || undefined);
     setName("");
+    setEmail("");
     setOpen(false);
   };
 
   return (
     <Popover open={open} onOpenChange={(o) => {
       setOpen(o);
-      if (o) { setName(""); setRole("creative"); setColor(ROLE_COLORS.creative); }
+      if (o) { setName(""); setEmail(""); setRole("creative"); setColor(ROLE_COLORS.creative); }
     }}>
       <PopoverTrigger asChild>
         <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -647,6 +660,16 @@ function AddMemberPopover() {
             placeholder="Nome do membro"
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             autoFocus
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">E-mail (opcional)</label>
+          <Input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="h-7 text-xs"
+            placeholder="email@pub.com"
+            onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           />
         </div>
         <div className="space-y-1.5">

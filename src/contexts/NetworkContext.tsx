@@ -14,6 +14,7 @@ export interface TeamMember {
   name: string;
   role: MemberRole;
   color: string;
+  email?: string;
 }
 
 export interface Project {
@@ -45,7 +46,7 @@ export interface NetworkState {
 interface NetworkContextType {
   state: NetworkState;
   // Members
-  addMember: (name: string, role: MemberRole, color: string) => void;
+  addMember: (name: string, role: MemberRole, color: string, email?: string) => void;
   updateMember: (id: string, updates: Partial<Omit<TeamMember, "id">>) => void;
   removeMember: (id: string) => void;
   // Projects
@@ -77,13 +78,13 @@ export const ROLE_LABELS: Record<MemberRole, string> = {
 
 // ─── Default data ────────────────────────────────────────────────
 const defaultMembers: TeamMember[] = [
-  { id: "m1", name: "Rod", role: "creative", color: "#dc2626" },
+  { id: "m1", name: "Rod", role: "creative", color: "#dc2626", email: "rod@thepublic.house" },
   { id: "m2", name: "Paula", role: "architect", color: "#16a34a" },
-  { id: "m3", name: "Paola", role: "architect", color: "#16a34a" },
-  { id: "m4", name: "Marcel", role: "3d", color: "#2563eb" },
-  { id: "m5", name: "Julio", role: "3d", color: "#2563eb" },
-  { id: "m6", name: "Evandro", role: "3d", color: "#2563eb" },
-  { id: "m7", name: "Mari", role: "3d", color: "#2563eb" },
+  { id: "m3", name: "Paola", role: "architect", color: "#16a34a", email: "paola@thepublic.house" },
+  { id: "m4", name: "Marcel", role: "3d", color: "#2563eb", email: "marcel@thepublic.house" },
+  { id: "m5", name: "Julio", role: "3d", color: "#2563eb", email: "julio@thepublic.house" },
+  { id: "m6", name: "Evandro", role: "3d", color: "#2563eb", email: "evandro@thepublic.house" },
+  { id: "m7", name: "Mari", role: "3d", color: "#2563eb", email: "mariana@thepublic.house" },
   { id: "TdyNfZ0C", name: "Vinicius", role: "creative", color: "#7c3aed" }
 ];
 
@@ -207,10 +208,10 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   }, [currentUserRole]);
 
   const addMember = useCallback(
-    (name: string, role: MemberRole, color: string) => {
+    (name: string, role: MemberRole, color: string, email?: string) => {
       updateState((s) => ({
         ...s,
-        members: [...s.members, { id: nanoid(8), name, role, color }],
+        members: [...s.members, { id: nanoid(8), name, role, color, email }],
       }));
     },
     [updateState]
