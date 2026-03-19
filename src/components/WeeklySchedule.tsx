@@ -314,7 +314,7 @@ function TaskBar({
       sourceSlot: entry.slotIndex || 0,
       sourceOffset: entry.startOffset || 0
     }));
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = "all";
 
     // Create a drag image
     const dragIcon = document.createElement('div');
@@ -352,7 +352,13 @@ function TaskBar({
         e.stopPropagation();
       }}
     >
-      <div className="flex-1 truncate text-center px-1.5 pointer-events-none select-none">
+      <div className="flex-1 truncate text-center px-1.5 pointer-events-none select-none relative">
+        {entry.googleEventId && (
+          <div 
+            className="absolute left-1 top-1.5 w-1 h-1 rounded-full bg-blue-300 shadow-[0_0_2px_rgba(147,197,253,0.8)]" 
+            title="Sincronizado com Google Agenda"
+          />
+        )}
         {entry.customLabel || (proj ? proj.name : act.label)}
       </div>
 
@@ -429,8 +435,9 @@ function ScheduleCell({
       if (targetSlot > 2) targetSlot = 2; // Up to 3 slots
 
       const isCopy = e.altKey;
+      const isDifferentPos = data.sourceMemberId !== memberId || data.sourceDate !== date || data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset;
 
-      if (data.entryId && (data.sourceMemberId !== memberId || data.sourceDate !== date || data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset)) {
+      if (data.entryId && (isDifferentPos || isCopy)) {
         if (isCopy) {
           const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
           if (sourceEntry) {

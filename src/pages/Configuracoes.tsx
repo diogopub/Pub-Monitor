@@ -338,6 +338,57 @@ function BackupSettingsSection() {
   );
 }
 
+function GoogleSyncSection() {
+  const { accessToken } = useAuth();
+
+  return (
+    <section className="p-4 sm:p-6 pt-0 border-t border-border mt-8">
+      <div className="flex items-center gap-2 mb-6">
+        <CalendarDays className="w-5 h-5 text-blue-500" />
+        <h2 className="text-lg font-bold font-heading tracking-wide">
+          Google Agenda (Sincronização)
+        </h2>
+      </div>
+
+      <div className="max-w-2xl bg-blue-500/5 border border-blue-500/20 rounded-xl p-6">
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${accessToken ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-muted"}`} />
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold uppercase tracking-wider">
+                Status: {accessToken ? "Sincronização Ativa" : "Sincronização Desativada"}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                {accessToken 
+                  ? "Seus agendamentos no Monitor serão criados automaticamente na sua Google Agenda." 
+                  : "Para ativar a sincronização, você precisa sair e entrar novamente, autorizando o acesso ao Calendário."}
+              </p>
+            </div>
+          </div>
+          
+          <div className="bg-black/20 rounded-lg p-3 border border-white/5">
+            <h4 className="text-[10px] font-bold text-muted-foreground uppercase mb-2">Como funciona:</h4>
+            <ul className="text-xs space-y-2 text-muted-foreground">
+              <li className="flex gap-2">
+                <span className="text-blue-400">•</span>
+                <span>Tarefas sincronizadas exibem um <strong>ponto azul</strong> no canto superior esquerdo da barra na agenda.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-blue-400">•</span>
+                <span>Ao mover ou deletar uma tarefa no Monitor, ela é atualizada instantaneamente no seu Google Agenda.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-blue-400">•</span>
+                <span>A sincronização funciona por sessão. Se o ponto azul não aparecer, tente refazer o login.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Configuracoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -359,6 +410,7 @@ export default function Configuracoes() {
           <PermissionsSettingsSection />
           <CloudMigrationSection />
           <BackupSettingsSection />
+          <GoogleSyncSection />
         </div>
       </div>
       <NewProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} />
