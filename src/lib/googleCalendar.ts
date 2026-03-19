@@ -1,14 +1,8 @@
 // ─── Google Calendar sync ─────────────────────────────────────────────────────
-//
-// Mapeamento de duração → períodos na Google Agenda:
-//   duration = 0.5 → 1 período (meio dia)
-//   duration = 1.0 → 2 períodos (dia cheio)
-//   Fórmula: numPeriods = Math.ceil(duration * 2)
 
 const TZ_OFFSET = "-03:00"; // Brasilia Time
 
 function formatLocalISOData(date: Date): string {
-  // Retorna YYYY-MM-DD sem converter para UTC
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -16,11 +10,10 @@ function formatLocalISOData(date: Date): string {
 }
 
 function nextWeekday(dateStr: string): string {
-  // dateStr is YYYY-MM-DD. We assume T12:00:00 to avoid any rollover issues.
   const d = new Date(dateStr + "T12:00:00");
   do {
     d.setDate(d.getDate() + 1);
-  } while (d.getDay() === 0 || d.getDay() === 6); // pula sáb + dom
+  } while (d.getDay() === 0 || d.getDay() === 6);
   return formatLocalISOData(d);
 }
 
@@ -29,43 +22,39 @@ export async function pushEventToGoogleCalendar(
   projectName: string,
   memberEmail: string,
   token: string
-): Promise<string[]> {
+): Promise<{ ids: string[]; error?: string }> {
   const eventIds: string[] = [];
   const CENTRAL_EMAIL = "projeto@thepublic.house";
   const TZ = "America/Sao_Paulo";
 
   const duration = entry.duration ?? 0.5;
   const startOffset = entry.startOffset ?? 0;
-  
-  // Quantidade de períodos a criar (máx. 10 = segunda a sexta, manhã + tarde)
   const numPeriods = Math.min(10, Math.max(1, Math.ceil(duration * 2)));
 
   const MORNING   = { start: "10:00:00", end: "13:00:00" };
   const AFTERNOON = { start: "14:00:00", end: "19:00:00" };
 
-  // Estado inicial: startOffset 0 → manhã, 0.5 → tarde
   let isAfternoon = startOffset >= 0.5;
   let currentDateStr = entry.startDate;
 
-  for (let p = 0; p < numPeriods; p++) {
-    const period = isAfternoon ? AFTERNOON : MORNING;
+  try {
+    for (let p = 0; p < numPeriods; p++) {
+      const period = isAfternoon ? AFTERNOON : MORNING;
+      const startDT = `${currentDateStr}T${period.start}${TZ_OFFSET}`;
+      const endDT   = `${currentDateStr}T${period.end}${TZ_OFFSET}`;
 
-    // RFC3339 exige o offset -03:00 se não for 'Z'
-    const startDT = `${currentDateStr}T${period.start}${TZ_OFFSET}`;
-    const endDT   = `${currentDateStr}T${period.end}${TZ_OFFSET}`;
+      const gEvent = {
+        summary: projectName,
+        start: { dateTime: startDT, timeZone: TZ },
+        end:   { dateTime: endDT,   timeZone: TZ },
+        attendees: [
+          { email: CENTRAL_EMAIL },
+          ...(memberEmail ? [{ email: memberEmail }] : []),
+        ],
+        description: "Sincronizado via Monitor PUB",
+        reminders: { useDefault: false, overrides: [] },
+      };
 
-    const gEvent = {
-      summary: projectName,
-      start: { dateTime: startDT, timeZone: TZ },
-      end:   { dateTime: endDT,   timeZone: TZ },
-      attendees: [
-        { email: CENTRAL_EMAIL },
-        ...(memberEmail ? [{ email: memberEmail }] : []),
-      ],
-      reminders: { useDefault: false, overrides: [] },
-    };
-
-    try {
       const res = await fetch(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none",
         {
@@ -78,27 +67,28 @@ export async function pushEventToGoogleCalendar(
         }
       );
 
-      if (res.ok) {
-        const data = await res.json();
-        eventIds.push(data.id);
-      } else {
-        const errJson = await res.json().catch(() => ({}));
-        console.error("Erro Google API (POST):", res.status, errJson);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error?.message || res.statusText;
+        console.error("Erro Google API (POST):", res.status, body);
+        return { ids: eventIds, error: `${res.status}: ${msg}` };
       }
-    } catch (e) {
-      console.error("Network error during Calendar sync:", e);
-    }
 
-    // Avança para o próximo período logicamente
-    if (isAfternoon) {
-      currentDateStr = nextWeekday(currentDateStr);
-      isAfternoon = false;
-    } else {
-      isAfternoon = true;
+      const data = await res.json();
+      eventIds.push(data.id);
+
+      if (isAfternoon) {
+        currentDateStr = nextWeekday(currentDateStr);
+        isAfternoon = false;
+      } else {
+        isAfternoon = true;
+      }
     }
+    return { ids: eventIds };
+  } catch (e: any) {
+    console.error("Erro de rede GCal:", e);
+    return { ids: eventIds, error: e.message };
   }
-
-  return eventIds;
 }
 
 export async function deleteEventsFromGoogleCalendar(eventIds: string[], token: string) {
@@ -113,11 +103,10 @@ export async function deleteEventsFromGoogleCalendar(eventIds: string[], token: 
         }
       );
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        console.error("Erro Google API (DELETE):", res.status, errJson);
+        console.error("Erro deletando evento:", res.status);
       }
     } catch (e) {
-      console.error("Erro excluindo evento:", e);
+      console.error("Network error deleting event:", e);
     }
   }
 }

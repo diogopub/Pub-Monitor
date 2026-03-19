@@ -452,16 +452,17 @@ function ScheduleCell({
     if (!projectName) return [];
     
     try {
-      const ids = await pushEventToGoogleCalendar(
+      const response = await pushEventToGoogleCalendar(
         { startDate: entryDate, duration, startOffset },
         projectName,
         memberEmail,
         googleAccessToken
       );
-      if (ids.length === 0) {
-        toast.error("Falha ao criar evento no Google Calendar.");
+      if (response.error) {
+        toast.error(`Erro Google: ${response.error}`);
+        return [];
       }
-      return ids;
+      return response.ids;
     } catch (err) {
       console.error("GCal push error:", err);
       toast.error("Erro técnico na sincronização com Google.");
