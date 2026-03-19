@@ -47,6 +47,7 @@ export interface ScheduleEntry {
   duration?: number; // length in slots, where 1 slot = 1 column wide
   slotIndex?: number; // 0, 1, or 2 for the vertical position
   startOffset?: number; // 0 or 0.5 for half-slot horizontal positioning
+  googleEventIds?: string[]; // IDs of the events created in Google Calendar
 }
 
 // ─── Special Rows ────────────────────────────────────────────────
@@ -73,7 +74,7 @@ export interface ScheduleState {
 
 interface ScheduleContextType {
   state: ScheduleState;
-  addEntry: (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number) => void;
+  addEntry: (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string) => void;
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => void;
   removeEntry: (id: string) => void;
   removeEntriesByCell: (memberId: string, date: string) => void;
@@ -151,7 +152,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   }, [updateState]);
 
   const addEntry = useCallback(
-    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number) => {
+    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string) => {
       updateState((s) => {
         const memberEntries = s.entries.filter(e => e.memberId === memberId);
         const takenSlots = new Set<number>();
@@ -172,7 +173,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
         while (takenSlots.has(autoSlot) && autoSlot < 3) autoSlot++;
 
         const newEntry: ScheduleEntry = { 
-          id: nanoid(8), 
+          id: id || nanoid(8), 
           memberId, 
           date, 
           activityId, 

@@ -6,6 +6,8 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork, ROLE_COLORS, type MemberRole } from "@/contexts/NetworkContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { pushEventToGoogleCalendar, deleteEventsFromGoogleCalendar } from "@/lib/googleCalendar";
 import {
   useSchedule,
   ACTIVITY_TYPES,
@@ -390,6 +392,8 @@ function ScheduleCell({
 }) {
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
   const { state: cardsState } = useProjectCards();
+  const { state: networkState } = useNetwork();
+  const { googleAccessToken } = useAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"activity" | "project">("activity");
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
@@ -399,6 +403,19 @@ function ScheduleCell({
   const handleActivitySelect = (activity: ActivityType) => {
     setSelectedActivity(activity);
     setStep("project");
+  };
+
+  // ─── Google Calendar helpers ─────────────────────────────────────
+  const getMemberEmail = (mId: string): string => {
+    const member = networkState.members.find(m => m.id === mId);
+    return member?.email || "";
+  };
+
+  const getProjectName = (projectId?: string, customLabel?: string): string => {
+    if (customLabel) return customLabel.toUpperCase();
+    if (!projectId) return "";
+    const card = cardsState.cards.find(c => c.id === projectId);
+    return card?.name?.toUpperCase() || "";
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -460,13 +477,50 @@ function ScheduleCell({
     }
   };
 
-  const handleProjectSelect = (projectId: string, customLabel?: string) => {
-    if (selectedActivity) {
-      addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel);
+  const handleProjectSelect = async (projectId: string, customLabel?: string) => {
+    if (!selectedActivity) return;
+    const slotIndex = entries.length; // next available slot
+    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 1, slotIndex);
+
+    // Push to Google Calendar if we have a token and a member email
+    const memberEmail = getMemberEmail(memberId);
+    const projectName = getProjectName(projectId, customLabel);
+    
+    if (googleAccessToken && memberEmail && projectName) {
+      // We need the newly created entry's id to store Google IDs back.
+      // Since addEntry is async internally, we use a small timeout to get it.
+      setTimeout(async () => {
+        try {
+          const newEntries = getEntriesForCell(memberId, date);
+          const newEntry = newEntries[newEntries.length - 1];
+          if (!newEntry) return;
+          const googleIds = await pushEventToGoogleCalendar(
+            { startDate: date, duration: 1, slotIndex },
+            projectName,
+            memberEmail,
+            googleAccessToken
+          );
+          if (googleIds.length > 0) {
+            updateEntry(newEntry.id, { googleEventIds: googleIds });
+          }
+        } catch (err) {
+          console.error("Google Calendar sync error:", err);
+        }
+      }, 300);
     }
+
     setOpen(false);
     setStep("activity");
     setSelectedActivity(null);
+  };
+
+  const handleRemoveEntry = async (entryId: string) => {
+    const entry = scheduleState.entries.find(e => e.id === entryId);
+    // Fire-and-forget deletion from Google Calendar
+    if (entry?.googleEventIds?.length && googleAccessToken) {
+      deleteEventsFromGoogleCalendar(entry.googleEventIds, googleAccessToken).catch(console.error);
+    }
+    removeEntry(entryId);
   };
 
   const handleClose = () => {
@@ -502,7 +556,7 @@ function ScheduleCell({
                 entry={entry}
                 act={act}
                 proj={proj}
-                removeEntry={removeEntry}
+                removeEntry={handleRemoveEntry}
                 updateEntry={updateEntry}
               />
             );
