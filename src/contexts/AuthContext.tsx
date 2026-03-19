@@ -14,6 +14,7 @@ interface AuthContextType {
   loading: boolean;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  clearGoogleToken: () => void;
   googleAccessToken: string | null;
 }
 
@@ -32,15 +33,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  const clearGoogleToken = () => {
+    setGoogleAccessToken(null);
+    sessionStorage.removeItem("g_token");
+  };
+
   const loginWithGoogle = async () => {
     try {
+      // Antes de logar, limpa o antigo
+      clearGoogleToken();
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         setGoogleAccessToken(credential.accessToken);
         sessionStorage.setItem("g_token", credential.accessToken);
       }
-      toast.success("Login realizado com sucesso!");
+      toast.success("Acesso Google renovado!");
     } catch (error: any) {
       console.error("Erro ao fazer login:", error);
       const errorCode = error.code || "unknown";
@@ -55,16 +63,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await signOut(auth);
-      setGoogleAccessToken(null);
-      sessionStorage.removeItem("g_token");
+      clearGoogleToken();
       toast.info("Você saiu do sistema");
     } catch (error) {
-      console.error("Erro ao sair:", error);
+      console.error("Erro ao fazer logout:", error);
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, googleAccessToken }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, clearGoogleToken, googleAccessToken }}>
       {children}
     </AuthContext.Provider>
   );

@@ -410,7 +410,7 @@ function ScheduleCell({
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const { state: networkState } = useNetwork();
-  const { googleAccessToken } = useAuth();
+  const { googleAccessToken, clearGoogleToken, loginWithGoogle } = useAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"activity" | "project">("activity");
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
@@ -473,7 +473,12 @@ function ScheduleCell({
         googleAccessToken
       );
       if (response.error) {
-        toast.error(`Erro Google: ${response.error}`);
+        if (response.error.includes("401")) {
+          clearGoogleToken();
+          toast.error("Sua sessão do Google expirou. Clique no botão de status (bolinha) no topo para renovar.");
+        } else {
+          toast.error(`Erro Google: ${response.error}`);
+        }
         return [];
       }
       return response.ids;
@@ -932,6 +937,7 @@ export default function WeeklySchedule() {
   const { state: networkState } = useNetwork();
   const { state: scheduleState, getWeekRoster, setWeekRoster } = useSchedule();
   const { state: cardsState } = useProjectCards();
+  const { googleAccessToken, loginWithGoogle } = useAuth();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
 
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
@@ -993,16 +999,32 @@ export default function WeeklySchedule() {
     <div className="border border-border rounded-lg bg-card/40 backdrop-blur-sm overflow-hidden">
       {/* Week navigation header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card/60">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Button variant="ghost" size="icon-sm" onClick={goToPrevWeek}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={goToNextWeek}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-          <span className="text-sm font-semibold font-heading ml-1">
-            {formatWeekRange(currentMonday)}
-          </span>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Status de Sincronização Google */}
+          <div className="flex items-center gap-2 pr-2 border-r border-border">
+            <button
+              onClick={() => loginWithGoogle()}
+              className="flex items-center gap-2 group transition-colors"
+              title={googleAccessToken ? "Sincronizado com Google" : "Acesso Google Expirado - Clique para renovar"}
+            >
+              <div className={`w-2.5 h-2.5 rounded-full shadow-sm animate-pulse ${googleAccessToken ? 'bg-green-500 shadow-green-500/50' : 'bg-red-500 shadow-red-500/50'}`} />
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${googleAccessToken ? 'text-green-500/80' : 'text-red-500'}`}>
+                {googleAccessToken ? 'Google Sync' : 'Renovar Sync'}
+              </span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon-sm" onClick={goToPrevWeek}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon-sm" onClick={goToNextWeek}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-semibold font-heading ml-1">
+              {formatWeekRange(currentMonday)}
+            </span>
+          </div>
         </div>
 
         {/* Project summaries inline */}
