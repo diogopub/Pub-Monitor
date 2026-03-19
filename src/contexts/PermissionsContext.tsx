@@ -77,6 +77,12 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
       return null;
     }
     const email = user.email?.toLowerCase();
+    
+    // Fallback para o administrador principal
+    if (email === "diogo@thepublic.house") {
+      return "admin";
+    }
+
     const found = authorizedUsers.find(u => u.email.toLowerCase() === email);
     console.log(`PermissionsProvider: Verificando e-mail ${email}. Encontrado:`, found);
     return found ? found.role : null;

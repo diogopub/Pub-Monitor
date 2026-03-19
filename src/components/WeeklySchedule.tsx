@@ -264,7 +264,7 @@ function TaskBar({
   act: ActivityType;
   proj: any;
   removeEntry: (id: string) => void;
-  updateEntry: (id: string, updates: Partial<ScheduleEntry>) => void;
+  updateEntry: (id: string, updates: Partial<ScheduleEntry>) => Promise<void> | void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
@@ -398,6 +398,9 @@ function ScheduleCell({
   const [step, setStep] = useState<"activity" | "project">("activity");
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
 
+  // ─── nanoid local (sem depender do contexto) ───────────────────
+  const nanoidLocal = () => Math.random().toString(36).slice(2, 10);
+
   const entries = getEntriesForCell(memberId, date);
 
   const handleActivitySelect = (activity: ActivityType) => {
@@ -405,7 +408,12 @@ function ScheduleCell({
     setStep("project");
   };
 
-  // ─── Google Calendar helpers ─────────────────────────────────────
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
+  };
+
+  // ─── Google Calendar helpers ──────────────────────────────────────
   const getMemberEmail = (mId: string): string => {
     const member = networkState.members.find(m => m.id === mId);
     return member?.email || "";
@@ -418,95 +426,45 @@ function ScheduleCell({
     return card?.name?.toUpperCase() || "";
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
+  // Cria evento(s) no Google Calendar e retorna os IDs criados
+  const pushToCalendar = async (
+    entryDate: string,
+    duration: number,
+    slotIdx: number,
+    membId: string,
+    projectId?: string,
+    customLabel?: string
+  ): Promise<string[]> => {
+    if (isEntradaEntrega) return [];
+    const memberEmail = getMemberEmail(membId);
+    const projectName = getProjectName(projectId, customLabel);
+    if (!googleAccessToken || !memberEmail || !projectName) return [];
     try {
-      const dataStr = e.dataTransfer.getData("application/json");
-      if (!dataStr) return;
-
-      const data = JSON.parse(dataStr);
-
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const colWidth = rect.width;
-      let targetOffset = 0;
-      if (x > colWidth * 0.5) {
-        targetOffset = 0.5;
-      }
-
-      const y = e.clientY - rect.top;
-      // calculate approximate row (each is ~22px height)
-      let targetSlot = Math.floor(y / 22);
-      if (targetSlot < 0) targetSlot = 0;
-      if (targetSlot > 2) targetSlot = 2; // Up to 3 slots
-
-      const isCopy = e.altKey;
-      const isDifferentPos = data.sourceMemberId !== memberId || data.sourceDate !== date || data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset;
-
-      if (data.entryId && (isDifferentPos || isCopy)) {
-        if (isCopy) {
-          const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
-          if (sourceEntry) {
-            addEntry(
-              memberId,
-              date,
-              sourceEntry.activityId,
-              sourceEntry.projectId,
-              sourceEntry.customLabel,
-              sourceEntry.duration,
-              targetSlot,
-              targetOffset
-            );
-          }
-        } else {
-          updateEntry(data.entryId, {
-            memberId: memberId,
-            date: date,
-            slotIndex: targetSlot,
-            startOffset: targetOffset
-          });
-        }
-      }
+      return await pushEventToGoogleCalendar(
+        { startDate: entryDate, duration, slotIndex: slotIdx },
+        projectName,
+        memberEmail,
+        googleAccessToken
+      );
     } catch (err) {
-      console.error("Failed to parse drop target", err);
+      console.error("GCal push error:", err);
+      return [];
     }
   };
 
+  // ─── Handlers com sincronização Calendar ─────────────────────────
+  // 1. CRIAR
   const handleProjectSelect = async (projectId: string, customLabel?: string) => {
     if (!selectedActivity) return;
-    const slotIndex = entries.length; // next available slot
-    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 1, slotIndex);
+    // Gera ID antecipadamente para poder salvar os IDs do GCal de volta
+    const newId = nanoidLocal();
+    const autoSlot = entries.length;
+    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 1, autoSlot, 0, newId);
 
-    // Push to Google Calendar if we have a token and a member email
-    const memberEmail = getMemberEmail(memberId);
-    const projectName = getProjectName(projectId, customLabel);
-    
-    if (googleAccessToken && memberEmail && projectName) {
-      // We need the newly created entry's id to store Google IDs back.
-      // Since addEntry is async internally, we use a small timeout to get it.
-      setTimeout(async () => {
-        try {
-          const newEntries = getEntriesForCell(memberId, date);
-          const newEntry = newEntries[newEntries.length - 1];
-          if (!newEntry) return;
-          const googleIds = await pushEventToGoogleCalendar(
-            { startDate: date, duration: 1, slotIndex },
-            projectName,
-            memberEmail,
-            googleAccessToken
-          );
-          if (googleIds.length > 0) {
-            updateEntry(newEntry.id, { googleEventIds: googleIds });
-          }
-        } catch (err) {
-          console.error("Google Calendar sync error:", err);
-        }
-      }, 300);
+    // Push imediato ao Google Calendar
+    const googleIds = await pushToCalendar(date, 1, autoSlot, memberId, projectId, customLabel);
+    if (googleIds.length > 0) {
+      updateEntry(newId, { googleEventIds: googleIds });
     }
 
     setOpen(false);
@@ -514,9 +472,85 @@ function ScheduleCell({
     setSelectedActivity(null);
   };
 
+  // 2. MOVER ou COPIAR (drag & drop)
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const dataStr = e.dataTransfer.getData("application/json");
+      if (!dataStr) return;
+      const data = JSON.parse(dataStr);
+
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const colWidth = rect.width;
+      let targetOffset = x > colWidth * 0.5 ? 0.5 : 0;
+
+      const y = e.clientY - rect.top;
+      let targetSlot = Math.min(2, Math.max(0, Math.floor(y / 22)));
+
+      const isCopy = e.altKey;
+      const isDifferentPos = data.sourceMemberId !== memberId || data.sourceDate !== date ||
+        data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset;
+
+      if (!data.entryId || (!isDifferentPos && !isCopy)) return;
+
+      const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
+      if (!sourceEntry) return;
+
+      if (isCopy) {
+        // Cópia: criar nova entry + novo evento no Calendar
+        const newId = nanoidLocal();
+        addEntry(memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, sourceEntry.duration, targetSlot, targetOffset, newId);
+        pushToCalendar(date, sourceEntry.duration || 1, targetSlot, memberId, sourceEntry.projectId, sourceEntry.customLabel)
+          .then(googleIds => { if (googleIds.length > 0) updateEntry(newId, { googleEventIds: googleIds }); });
+      } else {
+        // Mover: deletar eventos antigos, criar novos
+        if (sourceEntry.googleEventIds?.length && googleAccessToken) {
+          deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, googleAccessToken).catch(console.error);
+        }
+        updateEntry(data.entryId, { memberId, date, slotIndex: targetSlot, startOffset: targetOffset, googleEventIds: [] });
+        pushToCalendar(date, sourceEntry.duration || 1, targetSlot, memberId, sourceEntry.projectId, sourceEntry.customLabel)
+          .then(googleIds => { if (googleIds.length > 0) updateEntry(data.entryId, { googleEventIds: googleIds }); });
+      }
+    } catch (err) {
+      console.error("Failed to parse drop target", err);
+    }
+  };
+
+  // 3. REDIMENSIONAR ou qualquer outra alteração vinda do TaskBar
+  const handleUpdateEntry = async (entryId: string, updates: Partial<ScheduleEntry>) => {
+    const entry = scheduleState.entries.find(e => e.id === entryId);
+    if (!entry) { updateEntry(entryId, updates); return; }
+
+    const durationChanged = updates.duration !== undefined && updates.duration !== entry.duration;
+    const positionChanged = (updates.date !== undefined && updates.date !== entry.date) ||
+      (updates.slotIndex !== undefined && updates.slotIndex !== entry.slotIndex) ||
+      (updates.memberId !== undefined && updates.memberId !== entry.memberId);
+
+    if (durationChanged || positionChanged) {
+      // Deletar eventos Google antigos
+      if (entry.googleEventIds?.length && googleAccessToken) {
+        deleteEventsFromGoogleCalendar(entry.googleEventIds, googleAccessToken).catch(console.error);
+      }
+      // Atualizar localmente zerando os IDs
+      updateEntry(entryId, { ...updates, googleEventIds: [] });
+      // Criar novos eventos com os dados atualizados
+      const newDate = updates.date ?? entry.date;
+      const newDuration = updates.duration ?? entry.duration ?? 1;
+      const newSlot = updates.slotIndex ?? entry.slotIndex ?? 0;
+      const newMemberId = updates.memberId ?? entry.memberId;
+      const googleIds = await pushToCalendar(newDate, newDuration, newSlot, newMemberId, entry.projectId, entry.customLabel);
+      if (googleIds.length > 0) {
+        updateEntry(entryId, { googleEventIds: googleIds });
+      }
+    } else {
+      updateEntry(entryId, updates);
+    }
+  };
+
+  // 4. DELETAR
   const handleRemoveEntry = async (entryId: string) => {
     const entry = scheduleState.entries.find(e => e.id === entryId);
-    // Fire-and-forget deletion from Google Calendar
     if (entry?.googleEventIds?.length && googleAccessToken) {
       deleteEventsFromGoogleCalendar(entry.googleEventIds, googleAccessToken).catch(console.error);
     }
@@ -557,7 +591,7 @@ function ScheduleCell({
                 act={act}
                 proj={proj}
                 removeEntry={handleRemoveEntry}
-                updateEntry={updateEntry}
+                updateEntry={handleUpdateEntry}
               />
             );
           })}
