@@ -945,7 +945,7 @@ export default function WeeklySchedule() {
   // Active projects allocations summary
   const activeProjectSummaries = useMemo(() => {
     const summaries = new Map<string, number>();
-    const activeCards = cardsState.cards.filter(c => c.active !== false);
+    const activeCards = cardsState.cards.filter(c => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO");
     const activeCardIds = new Set(activeCards.map(c => c.id));
     scheduleState.entries.forEach(entry => {
       if (entry.projectId && activeCardIds.has(entry.projectId)) {
