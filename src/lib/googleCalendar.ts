@@ -30,7 +30,8 @@ export async function pushEventToGoogleCalendar(
   const slotIndex = entry.slotIndex ?? 0;
 
   // Quantidade de períodos a criar (máx. 10 = segunda a sexta, manhã + tarde)
-  const numPeriods = Math.min(10, Math.max(1, Math.ceil(duration * 2 - 1)));
+  // duration=0.5 → 1 período, duration=1.0 → 2, duration=1.5 → 3 ...
+  const numPeriods = Math.min(10, Math.max(1, Math.ceil(duration * 2)));
 
   const MORNING   = { start: "10:00:00", end: "13:00:00" };
   const AFTERNOON = { start: "14:00:00", end: "19:00:00" };

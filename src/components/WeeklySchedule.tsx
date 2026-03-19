@@ -461,10 +461,10 @@ function ScheduleCell({
     // Gera ID antecipadamente para poder salvar os IDs do GCal de volta
     const newId = nanoidLocal();
     const autoSlot = entries.length;
-    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 1, autoSlot, 0, newId);
+    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 0.5, autoSlot, 0, newId);
 
     // Push imediato ao Google Calendar
-    const googleIds = await pushToCalendar(date, 1, autoSlot, memberId, projectId, customLabel);
+    const googleIds = await pushToCalendar(date, 0.5, autoSlot, memberId, projectId, customLabel);
     if (googleIds.length > 0) {
       updateEntry(newId, { googleEventIds: googleIds });
     }
