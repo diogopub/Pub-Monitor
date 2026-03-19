@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function LoginMenu() {
   const { user, loginWithGoogle, logout, loading: authLoading } = useAuth();
-  const { currentUserRole, loading: permsLoading } = usePermissions();
+  const { currentUserRole, loading: permsLoading, requestAccess } = usePermissions();
 
   const loading = authLoading || permsLoading;
 
@@ -66,6 +67,16 @@ export function LoginMenu() {
 
   // If logged in but not authorized
   // An admin must add their email to the authorized users list
+  useEffect(() => {
+    if (user && !currentUserRole && authLoading === false && permsLoading === false) {
+      requestAccess({
+        email: user.email?.toLowerCase() || "",
+        name: user.displayName || "",
+        photoURL: user.photoURL || ""
+      });
+    }
+  }, [user, currentUserRole, authLoading, permsLoading]);
+
   if (!currentUserRole) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4">

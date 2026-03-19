@@ -5,8 +5,6 @@ import {
   onSnapshot, 
   setDoc, 
   collection,
-  query,
-  getDocs
 } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 
@@ -18,11 +16,21 @@ export interface AuthorizedUser {
   addedAt: number;
 }
 
+export interface PendingUser {
+  email: string;
+  name?: string;
+  photoURL?: string;
+  requestedAt: number;
+}
+
 interface PermissionsContextType {
   authorizedUsers: AuthorizedUser[];
+  pendingUsers: PendingUser[];
   currentUserRole: UserRole | null;
   addAuthorizedUser: (email: string, role: UserRole) => Promise<void>;
   removeAuthorizedUser: (email: string) => Promise<void>;
+  requestAccess: (user: { email: string; name?: string; photoURL?: string }) => Promise<void>;
+  removePendingRequest: (email: string) => Promise<void>;
   isAuthorized: boolean;
   loading: boolean;
 }
@@ -32,21 +40,28 @@ const PermissionsContext = createContext<PermissionsContextType | undefined>(und
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [authorizedUsers, setAuthorizedUsers] = useState<AuthorizedUser[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load authorized users list
+  // Load authorized and pending users
   useEffect(() => {
     console.log("PermissionsProvider: Iniciando listener do Firestore...");
     const unsub = onSnapshot(collection(db, "config"), (snapshot) => {
       const usersDoc = snapshot.docs.find(d => d.id === "authorized_users");
+      const pendingDoc = snapshot.docs.find(d => d.id === "pending_users");
+      
       if (usersDoc) {
-        const list = usersDoc.data().list || [];
-        console.log("PermissionsProvider: Lista de usuários atualizada:", list);
-        setAuthorizedUsers(list);
+        setAuthorizedUsers(usersDoc.data().list || []);
       } else {
-        console.warn("PermissionsProvider: Documento 'authorized_users' não encontrado na coleção 'config'");
         setAuthorizedUsers([]);
       }
+
+      if (pendingDoc) {
+        setPendingUsers(pendingDoc.data().list || []);
+      } else {
+        setPendingUsers([]);
+      }
+      
       setLoading(false);
     }, (error) => {
       console.error("PermissionsProvider: Erro no Firestore:", error);
@@ -83,12 +98,34 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
     await setDoc(doc(db, "config", "authorized_users"), { list: newList });
   };
 
+  const requestAccess = async (userData: { email: string; name?: string; photoURL?: string }) => {
+    // Check if already requested
+    const alreadyPending = pendingUsers.find(u => u.email === userData.email);
+    if (alreadyPending) return;
+
+    const newList = [...pendingUsers, {
+      email: userData.email,
+      name: userData.name,
+      photoURL: userData.photoURL,
+      requestedAt: Date.now()
+    }];
+    await setDoc(doc(db, "config", "pending_users"), { list: newList });
+  };
+
+  const removePendingRequest = async (email: string) => {
+    const newList = pendingUsers.filter(u => u.email !== email);
+    await setDoc(doc(db, "config", "pending_users"), { list: newList });
+  };
+
   return (
     <PermissionsContext.Provider value={{ 
       authorizedUsers, 
+      pendingUsers,
       currentUserRole, 
       addAuthorizedUser, 
       removeAuthorizedUser,
+      requestAccess,
+      removePendingRequest,
       isAuthorized,
       loading
     }}>
