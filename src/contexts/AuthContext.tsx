@@ -3,8 +3,7 @@ import {
   onAuthStateChanged, 
   signInWithPopup, 
   signOut, 
-  User,
-  GoogleAuthProvider
+  User 
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { toast } from "sonner";
@@ -12,7 +11,6 @@ import { toast } from "sonner";
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  accessToken: string | null;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -22,7 +20,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [accessToken, setAccessToken] = useState<string | null>(localStorage.getItem("google_access_token"));
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -34,15 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginWithGoogle = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken || null;
-      
-      if (token) {
-        localStorage.setItem("google_access_token", token);
-        setAccessToken(token);
-      }
-
+      await signInWithPopup(auth, googleProvider);
       toast.success("Login realizado com sucesso!");
     } catch (error: any) {
       console.error("Erro ao fazer login:", error);
@@ -58,8 +47,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await signOut(auth);
-      localStorage.removeItem("google_access_token");
-      setAccessToken(null);
       toast.info("Você saiu do sistema");
     } catch (error) {
       console.error("Erro ao sair:", error);
@@ -67,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, accessToken, loginWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

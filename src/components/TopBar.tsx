@@ -82,8 +82,9 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
 
 
   const navItems = [
-    { label: "Configurações", href: "/configuracoes" },
     { label: "Painel", href: "/" },
+    { label: "Teste Agenda", href: "/teste-agenda" },
+    { label: "Configurações", href: "/configuracoes" },
   ];
 
   return (

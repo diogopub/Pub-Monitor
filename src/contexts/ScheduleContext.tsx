@@ -5,12 +5,6 @@ import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
 import { sanitizeForFirestore } from "@/lib/utils";
-import { 
-  createGoogleEvent, 
-  updateGoogleEvent, 
-  deleteGoogleEvent, 
-  formatEntryForGoogle 
-} from "@/lib/googleCalendar";
 
 // ─── Activity Types with exact colors from reference ─────────────
 export interface ActivityType {
@@ -53,7 +47,6 @@ export interface ScheduleEntry {
   duration?: number; // length in slots, where 1 slot = 1 column wide
   slotIndex?: number; // 0, 1, or 2 for the vertical position
   startOffset?: number; // 0 or 0.5 for half-slot horizontal positioning
-  googleEventId?: string; // ID of the corresponding Google Calendar event
 }
 
 // ─── Special Rows ────────────────────────────────────────────────
@@ -120,7 +113,7 @@ const ScheduleContext = createContext<ScheduleContextType | null>(null);
 
 export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<ScheduleState>(loadState);
-  const { user, accessToken } = useAuth();
+  const { user } = useAuth();
   const { currentUserRole } = usePermissions();
   const isSyncingFromCloud = useRef(false);
 
@@ -151,37 +144,14 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   }, [currentUserRole]);
 
   const updateEntry = useCallback((id: string, updates: Partial<ScheduleEntry>) => {
-    updateState((s) => {
-      const entry = s.entries.find(e => e.id === id);
-      if (!entry) return s;
-
-      const updatedEntry = { ...entry, ...updates };
-
-      // Sync to Google
-      if (accessToken && updatedEntry.googleEventId) {
-        const allActs = [...ACTIVITY_TYPES, ...ENTRADAS_ACTIVITIES];
-        const activity = allActs.find(a => a.id === updatedEntry.activityId);
-        const gEvent = formatEntryForGoogle(
-          updatedEntry.date,
-          updatedEntry.duration || 1,
-          updatedEntry.customLabel || activity?.label || "Atividade",
-          "Sincronizado via PUB Monitor",
-          activity?.color
-        );
-        updateGoogleEvent(accessToken, updatedEntry.googleEventId, gEvent);
-      }
-
-      return {
-        ...s,
-        entries: s.entries.map(e => e.id === id ? updatedEntry : e),
-      };
-    });
-  }, [updateState, accessToken]);
+    updateState((s) => ({
+      ...s,
+      entries: s.entries.map(e => e.id === id ? { ...e, ...updates } : e),
+    }));
+  }, [updateState]);
 
   const addEntry = useCallback(
     (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number) => {
-      const entryId = nanoid(8);
-      
       updateState((s) => {
         const memberEntries = s.entries.filter(e => e.memberId === memberId);
         const takenSlots = new Set<number>();
@@ -202,7 +172,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
         while (takenSlots.has(autoSlot) && autoSlot < 3) autoSlot++;
 
         const newEntry: ScheduleEntry = { 
-          id: entryId, 
+          id: nanoid(8), 
           memberId, 
           date, 
           activityId, 
@@ -213,66 +183,33 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
           startOffset: startOffset ?? 0 
         };
 
-        // Sync to Google
-        if (accessToken) {
-          const allActs = [...ACTIVITY_TYPES, ...ENTRADAS_ACTIVITIES];
-          const activity = allActs.find(a => a.id === activityId);
-          const gEvent = formatEntryForGoogle(
-            date, 
-            duration ?? 1, 
-            customLabel || activity?.label || "Atividade",
-            "Sincronizado via PUB Monitor",
-            activity?.color
-          );
-          
-          createGoogleEvent(accessToken, gEvent).then(gId => {
-            if (gId) {
-              updateEntry(entryId, { googleEventId: gId });
-            }
-          });
-        }
-
         return {
           ...s,
           entries: [...s.entries, newEntry],
         };
       });
     },
-    [updateState, accessToken, updateEntry]
+    [updateState]
   );
 
   const removeEntry = useCallback(
     (id: string) => {
-      updateState((s) => {
-        const entry = s.entries.find(e => e.id === id);
-        if (accessToken && entry?.googleEventId) {
-          deleteGoogleEvent(accessToken, entry.googleEventId);
-        }
-        return {
-          ...s,
-          entries: s.entries.filter((e) => e.id !== id),
-        };
-      });
+      updateState((s) => ({
+        ...s,
+        entries: s.entries.filter((e) => e.id !== id),
+      }));
     },
-    [updateState, accessToken]
+    [updateState]
   );
 
   const removeEntriesByCell = useCallback(
     (memberId: string, date: string) => {
-      updateState((s) => {
-        const cellEntries = s.entries.filter(e => e.memberId === memberId && e.date === date);
-        if (accessToken) {
-          cellEntries.forEach(e => {
-            if (e.googleEventId) deleteGoogleEvent(accessToken, e.googleEventId);
-          });
-        }
-        return {
-          ...s,
-          entries: s.entries.filter((e) => !(e.memberId === memberId && e.date === date)),
-        };
-      });
+      updateState((s) => ({
+        ...s,
+        entries: s.entries.filter((e) => !(e.memberId === memberId && e.date === date)),
+      }));
     },
-    [updateState, accessToken]
+    [updateState]
   );
 
   const getEntriesForCell = useCallback(

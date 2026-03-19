@@ -353,12 +353,6 @@ function TaskBar({
       }}
     >
       <div className="flex-1 truncate text-center px-1.5 pointer-events-none select-none relative">
-        {entry.googleEventId && (
-          <div 
-            className="absolute left-1 top-1.5 w-1 h-1 rounded-full bg-blue-300 shadow-[0_0_2px_rgba(147,197,253,0.8)]" 
-            title="Sincronizado com Google Agenda"
-          />
-        )}
         {entry.customLabel || (proj ? proj.name : act.label)}
       </div>
 

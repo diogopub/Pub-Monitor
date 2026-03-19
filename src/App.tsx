@@ -10,6 +10,7 @@ import { ProjectCardsProvider } from "./contexts/ProjectCardsContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
 import Home from "./pages/Home";
+import TesteAgenda from "./pages/TesteAgenda";
 import Configuracoes from "./pages/Configuracoes";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { LoginMenu } from "./components/LoginMenu";
@@ -23,6 +24,7 @@ function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
+      <Route path={"/teste-agenda"} component={TesteAgenda} />
       <Route path={"/configuracoes"} component={Configuracoes} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
