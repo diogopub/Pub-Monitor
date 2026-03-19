@@ -39,6 +39,7 @@ import {
   Trash2,
   Calendar as CalendarIcon,
 } from "lucide-react";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ─── Date helpers ────────────────────────────────────────────────
@@ -440,16 +441,30 @@ function ScheduleCell({
     if (isEntradaEntrega) return [];
     const memberEmail = getMemberEmail(membId);
     const projectName = getProjectName(projectId, customLabel);
-    if (!googleAccessToken || !memberEmail || !projectName) return [];
+    if (!googleAccessToken) {
+      toast.error("Google Calendar não autorizado. Faça logout e login novamente.");
+      return [];
+    }
+    if (!memberEmail) {
+      toast.warning("Membro sem e-mail cadastrado. Sincronização ignorada.");
+      return [];
+    }
+    if (!projectName) return [];
+    
     try {
-      return await pushEventToGoogleCalendar(
+      const ids = await pushEventToGoogleCalendar(
         { startDate: entryDate, duration, startOffset },
         projectName,
         memberEmail,
         googleAccessToken
       );
+      if (ids.length === 0) {
+        toast.error("Falha ao criar evento no Google Calendar.");
+      }
+      return ids;
     } catch (err) {
       console.error("GCal push error:", err);
+      toast.error("Erro técnico na sincronização com Google.");
       return [];
     }
   };
