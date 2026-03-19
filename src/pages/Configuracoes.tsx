@@ -145,7 +145,7 @@ function CloudMigrationSection() {
   };
 
   return (
-    <section className="p-4 sm:p-6 pt-0 border-t border-border mt-8">
+    <section className="w-full">
       <div className="flex items-center gap-2 mb-6">
         <DatabaseZap className="w-5 h-5 text-amber-500" />
         <h2 className="text-lg font-bold font-heading tracking-wide">
@@ -153,7 +153,7 @@ function CloudMigrationSection() {
         </h2>
       </div>
 
-      <div className="max-w-2xl bg-amber-500/5 border border-amber-500/20 rounded-xl p-6">
+      <div className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl p-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-sm font-bold text-amber-500 uppercase tracking-wider">Migrar Local p/ Nuvem</h3>
@@ -282,7 +282,7 @@ function BackupSettingsSection() {
   const { googleAppsScriptUrl, autoBackupEnabled } = state.settings;
 
   return (
-    <section className="p-4 sm:p-6 pt-0 border-t border-border mt-8">
+    <section className="w-full">
       <div className="flex items-center gap-2 mb-6">
         <Cloud className="w-5 h-5 text-primary" />
         <h2 className="text-lg font-bold font-heading tracking-wide">
@@ -290,7 +290,7 @@ function BackupSettingsSection() {
         </h2>
       </div>
 
-      <div className="max-w-2xl bg-card/40 backdrop-blur-sm border border-border rounded-xl p-6 space-y-6">
+      <div className="w-full bg-card/40 backdrop-blur-sm border border-border rounded-xl p-6 space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <h3 className="text-sm font-bold text-foreground">Backup Automático</h3>
@@ -349,8 +349,10 @@ export default function Configuracoes() {
           </section>
           <ProjectCardsSection onOpenDialog={() => setDialogOpen(true)} />
           <PermissionsSettingsSection />
-          <CloudMigrationSection />
-          <BackupSettingsSection />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 sm:p-6 pt-0 border-t border-border mt-8">
+            <CloudMigrationSection />
+            <BackupSettingsSection />
+          </div>
         </div>
       </div>
       <NewProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} />
