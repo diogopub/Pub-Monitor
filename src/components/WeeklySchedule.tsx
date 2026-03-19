@@ -32,6 +32,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  UserPlus,
+  CalendarPlus,
   X,
   Search,
   Trash2,
@@ -638,6 +640,7 @@ function EditMemberPopover({
   const { updateMember, removeMember } = useNetwork();
   const [name, setName] = useState(member.name);
   const [color, setColor] = useState(member.color);
+  const [role, setRole] = useState<MemberRole>((member as any).role || "creative");
   const [email, setEmail] = useState(member.email || "");
   const [open, setOpen] = useState(false);
 
@@ -645,7 +648,12 @@ function EditMemberPopover({
 
   const handleSave = () => {
     if (name.trim()) {
-      updateMember(member.id, { name: name.trim(), color, email: email.trim() || undefined });
+      updateMember(member.id, { 
+        name: name.trim(), 
+        role,
+        color, 
+        email: email.trim() || undefined 
+      });
     }
     setOpen(false);
   };
@@ -653,7 +661,12 @@ function EditMemberPopover({
   return (
     <Popover open={open} onOpenChange={(o) => {
       setOpen(o);
-      if (o) { setName(member.name); setColor(member.color); setEmail(member.email || ""); }
+      if (o) { 
+        setName(member.name); 
+        setColor(member.color); 
+        setRole((member as any).role || "creative");
+        setEmail(member.email || ""); 
+      }
     }}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent className="w-52 p-3 space-y-3" side="right" align="start">
@@ -675,6 +688,24 @@ function EditMemberPopover({
             placeholder="email@pub.com"
             onKeyDown={(e) => e.key === "Enter" && handleSave()}
           />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase">Função</label>
+          <Select value={role} onValueChange={(v) => {
+            const r = v as MemberRole;
+            setRole(r);
+            setColor(ROLE_COLORS[r]);
+          }}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="creative">Criativo</SelectItem>
+              <SelectItem value="architect">Arquiteto</SelectItem>
+              <SelectItem value="3d">3D</SelectItem>
+              <SelectItem value="management">Gestão</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <label className="text-[10px] font-semibold text-muted-foreground uppercase">Cor</label>
@@ -734,8 +765,8 @@ function AddMemberPopover() {
       if (o) { setName(""); setEmail(""); setRole("creative"); setColor(ROLE_COLORS.creative); }
     }}>
       <PopoverTrigger asChild>
-        <button className="text-muted-foreground hover:text-foreground transition-colors">
-          <Plus className="w-3.5 h-3.5" />
+        <button className="text-muted-foreground hover:text-foreground transition-colors" title="Criar novo membro (global)">
+          <UserPlus className="w-4 h-4" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-52 p-3 space-y-3" side="right" align="start">
@@ -774,6 +805,7 @@ function AddMemberPopover() {
               <SelectItem value="creative">Criativo</SelectItem>
               <SelectItem value="architect">Arquiteto</SelectItem>
               <SelectItem value="3d">3D</SelectItem>
+              <SelectItem value="management">Gestão</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -904,7 +936,7 @@ export default function WeeklySchedule() {
     const memberRows = weekRosterIds
       .map((id) => networkState.members.find((m) => m.id === id))
       .filter(Boolean)
-      .map((m) => ({ id: m!.id, name: m!.name, color: m!.color, type: "member" as const }));
+      .map((m) => ({ id: m!.id, name: m!.name, color: m!.color, role: m!.role, email: m!.email, type: "member" as const }));
     const specialRows = scheduleState.specialRows
       .filter((r) => r.type !== "freelancer")
       .map((r) => ({ id: r.id, name: r.name, color: "#6366f1", type: r.type as "entradas-entregas" }));
@@ -944,12 +976,16 @@ export default function WeeklySchedule() {
         <table className="w-full border-collapse min-w-[700px]">
           <thead>
             <tr>
-              <th className="w-[120px] text-left px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-card/40 sticky left-0 z-10">
-                <AddMemberToWeekPopover
-                  weekKey={weekKey}
-                  currentRoster={weekRosterIds}
-                  allMembers={networkState.members}
-                />
+              <th className="w-[120px] text-left px-3 py-2 text-[10px] border-b border-border bg-card/40 sticky left-0 z-10">
+                <div className="flex items-center gap-2">
+                  <AddMemberToWeekPopover
+                    weekKey={weekKey}
+                    currentRoster={weekRosterIds}
+                    allMembers={networkState.members}
+                  />
+                  <div className="h-3 w-[1px] bg-border" />
+                  <AddMemberPopover />
+                </div>
               </th>
               {weekDays.map((day) => {
                 const { day: dayNum, weekday } = formatDayHeader(day);

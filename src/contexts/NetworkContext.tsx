@@ -7,7 +7,7 @@ import { usePermissions } from "./PermissionsContext";
 import { sanitizeForFirestore } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────
-export type MemberRole = "creative" | "architect" | "3d";
+export type MemberRole = "creative" | "architect" | "3d" | "management";
 
 export interface TeamMember {
   id: string;
@@ -65,15 +65,17 @@ interface NetworkContextType {
 
 // ─── Role colors ─────────────────────────────────────────────────
 export const ROLE_COLORS: Record<MemberRole, string> = {
-  creative: "#dc2626",
-  architect: "#16a34a",
-  "3d": "#7c3aed",
+  creative: "#dc2626", // Red-600
+  architect: "#16a34a", // Green-600
+  "3d": "#2563eb", // Blue-600
+  management: "#f59e0b", // Amber-500
 };
 
 export const ROLE_LABELS: Record<MemberRole, string> = {
   creative: "Criativo",
   architect: "Arquiteto",
   "3d": "3D",
+  management: "Gestão",
 };
 
 // ─── Default data ────────────────────────────────────────────────
