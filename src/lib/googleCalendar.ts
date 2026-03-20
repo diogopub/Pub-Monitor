@@ -32,7 +32,7 @@ export async function pushEventToGoogleCalendar(
   const numPeriods = Math.min(10, Math.max(1, Math.ceil(duration * 2)));
 
   const MORNING   = { start: "10:00:00", end: "13:00:00" };
-  const AFTERNOON = { start: "14:00:00", end: "19:00:00" };
+  const AFTERNOON = { start: "14:00:00", end: "18:00:00" };
 
   let isAfternoon = startOffset >= 0.5;
   let currentDateStr = entry.startDate;
