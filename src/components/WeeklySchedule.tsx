@@ -420,7 +420,7 @@ function ScheduleCell({
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const { state: networkState } = useNetwork();
-  const { googleAccessToken, clearGoogleToken, loginWithGoogle } = useAuth();
+  const { googleAccessToken, clearGoogleToken, loginWithGoogle, ensureGoogleToken } = useAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"activity" | "project">("activity");
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
@@ -463,12 +463,15 @@ function ScheduleCell({
     customLabel?: string
   ): Promise<string[]> => {
     if (isEntradaEntrega) return [];
-    const memberEmail = getMemberEmail(membId);
-    const projectName = getProjectName(projectId, customLabel);
-    if (!googleAccessToken) {
+    
+    const validToken = await ensureGoogleToken();
+    if (!validToken) {
       toast.error("Google Calendar não autorizado. Faça logout e login novamente.");
       return [];
     }
+
+    const memberEmail = getMemberEmail(membId);
+    const projectName = getProjectName(projectId, customLabel);
     if (!memberEmail) {
       toast.warning("Membro sem e-mail cadastrado. Sincronização ignorada.");
       return [];
@@ -480,7 +483,7 @@ function ScheduleCell({
         { startDate: entryDate, duration, startOffset },
         projectName,
         memberEmail,
-        googleAccessToken
+        validToken
       );
       if (response.error) {
         if (response.error.includes("401")) {
@@ -522,7 +525,7 @@ function ScheduleCell({
   };
 
   // 2. MOVER ou COPIAR (drag & drop)
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     try {
       const dataStr = e.dataTransfer.getData("application/json");
@@ -558,8 +561,9 @@ function ScheduleCell({
           .then(googleIds => { if (googleIds.length > 0) updateEntry(newId, { googleEventIds: googleIds }); });
       } else {
         // Mover: deletar eventos antigos, criar novos
-        if (sourceEntry.googleEventIds?.length && googleAccessToken) {
-          deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, googleAccessToken).catch(console.error);
+        if (sourceEntry.googleEventIds?.length) {
+          const t = await ensureGoogleToken();
+          if (t) deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, t).catch(console.error);
         }
         updateEntry(data.entryId, { memberId, date, slotIndex: targetSlot, startOffset: targetOffset, googleEventIds: [] });
         pushToCalendar(date, sourceEntry.duration || 0.5, targetOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
@@ -587,8 +591,9 @@ function ScheduleCell({
 
     if (durationChanged || positionChanged) {
       // Deletar eventos Google antigos
-      if (entry.googleEventIds?.length && googleAccessToken) {
-        deleteEventsFromGoogleCalendar(entry.googleEventIds, googleAccessToken).catch(console.error);
+      if (entry.googleEventIds?.length) {
+        const t = await ensureGoogleToken();
+        if (t) deleteEventsFromGoogleCalendar(entry.googleEventIds, t).catch(console.error);
       }
       // Atualizar localmente zerando os IDs
       updateEntry(entryId, { ...updates, googleEventIds: [] });
@@ -612,8 +617,9 @@ function ScheduleCell({
     if (entry && isPastDate(entry.date)) {
       if (!window.confirm("Atenção: você está excluindo uma alocação de um dia que já passou. Deseja continuar?")) return;
     }
-    if (entry?.googleEventIds?.length && googleAccessToken) {
-      deleteEventsFromGoogleCalendar(entry.googleEventIds, googleAccessToken).catch(console.error);
+    if (entry?.googleEventIds?.length) {
+      const t = await ensureGoogleToken();
+      if (t) deleteEventsFromGoogleCalendar(entry.googleEventIds, t).catch(console.error);
     }
     removeEntry(entryId);
   };

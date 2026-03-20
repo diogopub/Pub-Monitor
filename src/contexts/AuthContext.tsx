@@ -16,6 +16,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   clearGoogleToken: () => void;
   googleAccessToken: string | null;
+  ensureGoogleToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,6 +37,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearGoogleToken = () => {
     setGoogleAccessToken(null);
     sessionStorage.removeItem("g_token");
+    sessionStorage.removeItem("g_token_expires");
+  };
+
+  const ensureGoogleToken = async () => {
+    const token = sessionStorage.getItem("g_token");
+    if (!token) return null;
+    
+    const expiresAt = Number(sessionStorage.getItem("g_token_expires") || "0");
+    // Se o token expirar nos próximos 5 minutos (ou já expirou), renova
+    if (Date.now() > expiresAt) {
+      try {
+        console.log("Auto-renovando token do Google...");
+        const result = await signInWithPopup(auth, googleProvider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        if (credential?.accessToken) {
+          setGoogleAccessToken(credential.accessToken);
+          sessionStorage.setItem("g_token", credential.accessToken);
+          sessionStorage.setItem("g_token_expires", String(Date.now() + 3300 * 1000)); // 55 minutos
+          return credential.accessToken;
+        }
+      } catch (error: any) {
+        if (error.code === 'auth/popup-blocked') {
+          toast.error("O navegador bloqueou a renovação. Clique no botão de Renovar Sync.");
+        } else {
+          console.error("Falha ao auto-renovar token", error);
+        }
+        clearGoogleToken();
+        return null;
+      }
+    }
+    return token;
   };
 
   const loginWithGoogle = async () => {
@@ -47,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (credential?.accessToken) {
         setGoogleAccessToken(credential.accessToken);
         sessionStorage.setItem("g_token", credential.accessToken);
+        sessionStorage.setItem("g_token_expires", String(Date.now() + 3300 * 1000)); // 55 minutos
       }
       toast.success("Acesso Google renovado!");
     } catch (error: any) {
@@ -71,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, clearGoogleToken, googleAccessToken }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, clearGoogleToken, googleAccessToken, ensureGoogleToken }}>
       {children}
     </AuthContext.Provider>
   );
