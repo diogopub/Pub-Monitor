@@ -15,6 +15,7 @@ import {
 import { Filter, Download, Upload, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, Link } from "wouter";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 interface TopBarProps {
   filterRole?: MemberRole | "all";
@@ -81,8 +82,12 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
   };
 
 
+  const { currentUserRole } = usePermissions();
+
   const navItems = [
-    { label: "Configurações", href: "/configuracoes" },
+    ...(currentUserRole === "admin" || currentUserRole === "editor" 
+      ? [{ label: "Configurações", href: "/configuracoes" }] 
+      : []),
     { label: "Painel", href: "/" },
   ];
 

@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { usePermissions, UserRole } from "@/contexts/PermissionsContext";
+import { useLocation } from "wouter";
+import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -440,6 +442,19 @@ function BackupSettingsSection() {
 
 export default function Configuracoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { currentUserRole, loading } = usePermissions();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!loading && currentUserRole === "viewer") {
+      toast.error("Visualizadores não têm acesso a esta página.");
+      setLocation("/");
+    }
+  }, [currentUserRole, loading, setLocation]);
+
+  if (currentUserRole === "viewer") {
+    return null; // Don't render anything while redirecting
+  }
 
   return (
     <>
