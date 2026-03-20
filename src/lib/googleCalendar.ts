@@ -48,7 +48,6 @@ export async function pushEventToGoogleCalendar(
         start: { dateTime: startDT, timeZone: TZ },
         end:   { dateTime: endDT,   timeZone: TZ },
         attendees: [
-          { email: CENTRAL_EMAIL },
           ...(memberEmail ? [{ email: memberEmail }] : []),
         ],
         description: "Sincronizado via Monitor PUB",
@@ -56,7 +55,7 @@ export async function pushEventToGoogleCalendar(
       };
 
       const res = await fetch(
-        "https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=none",
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CENTRAL_EMAIL)}/events?sendUpdates=none`,
         {
           method: "POST",
           headers: {
@@ -92,11 +91,12 @@ export async function pushEventToGoogleCalendar(
 }
 
 export async function deleteEventsFromGoogleCalendar(eventIds: string[], token: string) {
+  const CENTRAL_EMAIL = "projeto@thepublic.house";
   for (const id of eventIds) {
     if (!id) continue;
     try {
       const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${id}?sendUpdates=none`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CENTRAL_EMAIL)}/events/${id}?sendUpdates=none`,
         {
           method: "DELETE",
           headers: { "Authorization": `Bearer ${token}` },

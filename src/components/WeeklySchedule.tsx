@@ -398,6 +398,16 @@ function TaskBar({
 }
 
 // ─── Cell content ────────────────────────────────────────────────
+function isPastDate(dateStr: string): boolean {
+  if (!dateStr) return false;
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${y}-${m}-${d}`;
+  return dateStr < todayStr;
+}
+
 function ScheduleCell({
   memberId,
   date,
@@ -493,6 +503,7 @@ function ScheduleCell({
   // 1. CRIAR
   const handleProjectSelect = async (projectId: string, customLabel?: string) => {
     if (!selectedActivity) return;
+    if (isPastDate(date) && !window.confirm("Atenção: você está adicionando uma alocação em um dia que já passou. Deseja continuar?")) return;
     // Gera ID antecipadamente para poder salvar os IDs do GCal de volta
     const newId = nanoidLocal();
     const autoSlot = entries.length;
@@ -535,6 +546,10 @@ function ScheduleCell({
       const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
       if (!sourceEntry) return;
 
+      if ((isPastDate(data.sourceDate) || isPastDate(date)) && !window.confirm("Atenção: você está movendo/editando uma alocação de um dia que já passou. Deseja continuar?")) {
+        return;
+      }
+
       if (isCopy) {
         // Cópia: criar nova entry + novo evento no Calendar
         const newId = nanoidLocal();
@@ -559,6 +574,11 @@ function ScheduleCell({
   const handleUpdateEntry = async (entryId: string, updates: Partial<ScheduleEntry>) => {
     const entry = scheduleState.entries.find(e => e.id === entryId);
     if (!entry) { updateEntry(entryId, updates); return; }
+
+    const newDate = updates.date ?? entry.date;
+    if ((isPastDate(entry.date) || isPastDate(newDate)) && !window.confirm("Atenção: você está editando uma alocação de um dia que já passou. Deseja continuar?")) {
+      return;
+    }
 
     const durationChanged = updates.duration !== undefined && updates.duration !== entry.duration;
     const positionChanged = (updates.date !== undefined && updates.date !== entry.date) ||
@@ -589,6 +609,9 @@ function ScheduleCell({
   // 4. DELETAR
   const handleRemoveEntry = async (entryId: string) => {
     const entry = scheduleState.entries.find(e => e.id === entryId);
+    if (entry && isPastDate(entry.date)) {
+      if (!window.confirm("Atenção: você está excluindo uma alocação de um dia que já passou. Deseja continuar?")) return;
+    }
     if (entry?.googleEventIds?.length && googleAccessToken) {
       deleteEventsFromGoogleCalendar(entry.googleEventIds, googleAccessToken).catch(console.error);
     }
