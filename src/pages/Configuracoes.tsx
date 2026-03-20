@@ -5,6 +5,7 @@ import { useState } from "react";
 import TopBar from "@/components/TopBar";
 import WeeklySchedule from "@/components/WeeklySchedule";
 import ProjectCard from "@/components/ProjectCard";
+import ProjectTimelines from "@/components/ProjectTimelines";
 import NewProjectDialog from "@/components/NewProjectDialog";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork } from "@/contexts/NetworkContext";
@@ -474,6 +475,7 @@ export default function Configuracoes() {
             </div>
             <WeeklySchedule viewMode={isMonthView ? "month" : "week"} />
           </section>
+          <ProjectTimelines />
           <ProjectCardsSection onOpenDialog={() => setDialogOpen(true)} />
           <PermissionsSettingsSection />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 sm:p-6 pt-0 border-t border-border mt-8">
