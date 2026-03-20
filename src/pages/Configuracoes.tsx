@@ -442,6 +442,7 @@ function BackupSettingsSection() {
 
 export default function Configuracoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [isMonthView, setIsMonthView] = useState(false);
   const { currentUserRole, loading } = usePermissions();
   const [, setLocation] = useLocation();
 
@@ -462,13 +463,16 @@ export default function Configuracoes() {
         <TopBar />
         <div className="flex-1 overflow-auto">
           <section className="p-4 sm:p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <CalendarDays className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-bold font-heading tracking-wide">
-                Agenda Semanal
-              </h2>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-bold font-heading tracking-wide">
+                  Agenda Semanal
+                </h2>
+              </div>
+              <Switch checked={isMonthView} onCheckedChange={setIsMonthView} />
             </div>
-            <WeeklySchedule />
+            <WeeklySchedule viewMode={isMonthView ? "month" : "week"} />
           </section>
           <ProjectCardsSection onOpenDialog={() => setDialogOpen(true)} />
           <PermissionsSettingsSection />

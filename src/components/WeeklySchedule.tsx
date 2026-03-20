@@ -956,7 +956,7 @@ function AddMemberToWeekPopover({
   );
 }
 
-export default function WeeklySchedule() {
+export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week" | "month" }) {
   const { state: networkState } = useNetwork();
   const { state: scheduleState, getWeekRoster, setWeekRoster } = useSchedule();
   const { state: cardsState } = useProjectCards();
@@ -985,11 +985,19 @@ export default function WeeklySchedule() {
   }, [scheduleState.entries, cardsState.cards]);
 
   const weekDays = useMemo(() => {
-    return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
-  }, [currentMonday]);
+    const daysCount = viewMode === "month" ? 20 : 5;
+    const days = [];
+    let d = new Date(currentMonday);
+    for (let i = 0; i < daysCount; i++) {
+        days.push(new Date(d));
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() === 6) d.setDate(d.getDate() + 2); // Skip weekend
+    }
+    return days;
+  }, [currentMonday, viewMode]);
 
-  const goToPrevWeek = () => setCurrentMonday((m) => addDays(m, -7));
-  const goToNextWeek = () => setCurrentMonday((m) => addDays(m, 7));
+  const goToPrevPeriod = () => setCurrentMonday((m) => addDays(m, viewMode === "month" ? -28 : -7));
+  const goToNextPeriod = () => setCurrentMonday((m) => addDays(m, viewMode === "month" ? 28 : 7));
   const goToToday = () => setCurrentMonday(getMonday(new Date()));
 
   const today = formatDate(new Date());
@@ -1038,14 +1046,16 @@ export default function WeeklySchedule() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon-sm" onClick={goToPrevWeek}>
+            <Button variant="ghost" size="icon-sm" onClick={goToPrevPeriod}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon-sm" onClick={goToNextWeek}>
+            <Button variant="ghost" size="icon-sm" onClick={goToNextPeriod}>
               <ChevronRight className="w-4 h-4" />
             </Button>
             <span className="text-sm font-semibold font-heading ml-1">
-              {formatWeekRange(currentMonday)}
+              {viewMode === "month" 
+                ? `${String(weekDays[0].getDate()).padStart(2, '0')}/${String(weekDays[0].getMonth() + 1).padStart(2, '0')} - ${String(weekDays[19].getDate()).padStart(2, '0')}/${String(weekDays[19].getMonth() + 1).padStart(2, '0')}` 
+                : formatWeekRange(currentMonday)}
             </span>
           </div>
         </div>
@@ -1063,11 +1073,11 @@ export default function WeeklySchedule() {
       </div>
 
       {/* Grid */}
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[700px]">
+      <div className={`overflow-x-auto ${viewMode === "month" ? "" : ""}`}>
+        <table className={`w-full border-collapse ${viewMode === "month" ? "min-w-0" : "min-w-[700px]"}`}>
           <thead>
             <tr>
-              <th className="w-[120px] text-left px-3 py-2 text-[10px] border-b border-border bg-card/40 sticky left-0 z-10">
+              <th className="w-[120px] text-left px-3 py-2 text-[10px] border-b border-border bg-card/40 sticky left-0 z-10 w-fit">
                 <AddMemberPopover weekKey={weekKey} weekRosterIds={weekRosterIds} />
               </th>
               {weekDays.map((day) => {
@@ -1076,14 +1086,15 @@ export default function WeeklySchedule() {
                 return (
                   <th
                     key={formatDate(day)}
-                    className={`text-center px-2 py-2 border-b border-l border-border min-w-[140px] ${isToday ? "bg-primary/10" : "bg-card/40"
-                      }`}
+                    className={`text-center py-2 border-b border-l border-border 
+                      ${viewMode === "month" ? "min-w-[40px] px-0.5" : "min-w-[140px] px-2"} 
+                      ${isToday ? "bg-primary/10" : "bg-card/40"}`}
                   >
                     <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
-                      <div className={`text-[10px] font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"}`}>
+                      <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" ? "text-[8px]" : "text-[10px]"}`}>
                         {weekday}
                       </div>
-                      <div className={`text-[13px] font-bold font-heading ${isToday ? "text-primary" : "text-foreground"}`}>
+                      <div className={`font-bold font-heading ${isToday ? "text-primary" : "text-foreground"} ${viewMode === "month" ? "text-[10px]" : "text-[13px]"}`}>
                         {dayNum}
                       </div>
                     </div>
@@ -1097,7 +1108,7 @@ export default function WeeklySchedule() {
               const isEntrada = row.type === "entradas-entregas";
               return (
                 <tr key={row.id} className={`group/row hover:bg-accent/10 transition-colors ${isEntrada ? "min-h-[64px]" : ""}`}>
-                  <td className={`px-3 border-b border-border bg-card/30 sticky left-0 z-10 ${isEntrada ? "py-3" : "py-1.5"}`}>
+                  <td className={`px-3 border-b border-border bg-card/30 sticky left-0 z-10 w-fit ${isEntrada ? "py-3" : "py-1.5"}`}>
                     <div className="flex items-center gap-1 group/rowlabel">
                       <EditMemberPopover member={row}>
                         <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left">
