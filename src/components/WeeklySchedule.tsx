@@ -985,19 +985,12 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
   }, [scheduleState.entries, cardsState.cards]);
 
   const weekDays = useMemo(() => {
-    const daysCount = viewMode === "month" ? 20 : 5;
-    const days = [];
-    let d = new Date(currentMonday);
-    for (let i = 0; i < daysCount; i++) {
-        days.push(new Date(d));
-        d.setDate(d.getDate() + 1);
-        if (d.getDay() === 6) d.setDate(d.getDate() + 2); // Skip weekend
-    }
-    return days;
+    const daysCount = viewMode === "month" ? 28 : 5;
+    return Array.from({ length: daysCount }, (_, i) => addDays(currentMonday, i));
   }, [currentMonday, viewMode]);
 
-  const goToPrevPeriod = () => setCurrentMonday((m) => addDays(m, viewMode === "month" ? -28 : -7));
-  const goToNextPeriod = () => setCurrentMonday((m) => addDays(m, viewMode === "month" ? 28 : 7));
+  const goToPrevPeriod = () => setCurrentMonday((m) => addDays(m, -7));
+  const goToNextPeriod = () => setCurrentMonday((m) => addDays(m, 7));
   const goToToday = () => setCurrentMonday(getMonday(new Date()));
 
   const today = formatDate(new Date());
@@ -1054,7 +1047,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
             </Button>
             <span className="text-sm font-semibold font-heading ml-1">
               {viewMode === "month" 
-                ? `${String(weekDays[0].getDate()).padStart(2, '0')}/${String(weekDays[0].getMonth() + 1).padStart(2, '0')} - ${String(weekDays[19].getDate()).padStart(2, '0')}/${String(weekDays[19].getMonth() + 1).padStart(2, '0')}` 
+                ? `${String(weekDays[0].getDate()).padStart(2, '0')}/${String(weekDays[0].getMonth() + 1).padStart(2, '0')} - ${String(weekDays[27].getDate()).padStart(2, '0')}/${String(weekDays[27].getMonth() + 1).padStart(2, '0')}` 
                 : formatWeekRange(currentMonday)}
             </span>
           </div>
@@ -1083,12 +1076,13 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
               {weekDays.map((day) => {
                 const { day: dayNum, weekday } = formatDayHeader(day);
                 const isToday = formatDate(day) === today;
+                const isWeekend = day.getDay() === 0 || day.getDay() === 6;
                 return (
                   <th
                     key={formatDate(day)}
                     className={`text-center py-2 border-b border-l border-border 
                       ${viewMode === "month" ? "min-w-[40px] px-0.5" : "min-w-[140px] px-2"} 
-                      ${isToday ? "bg-primary/10" : "bg-card/40"}`}
+                      ${isToday ? "bg-primary/20" : isWeekend ? "bg-black/20" : "bg-card/40"}`}
                   >
                     <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
                       <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" ? "text-[8px]" : "text-[10px]"}`}>
@@ -1135,10 +1129,11 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                   {weekDays.map((day, dayIdx) => {
                     const dateStr = formatDate(day);
                     const isToday = dateStr === today;
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
                     return (
                       <td
                         key={dateStr}
-                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : ""
+                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : isWeekend ? "bg-black/10" : ""
                           }`}
                         style={{ zIndex: 10 - dayIdx }}
                       >
