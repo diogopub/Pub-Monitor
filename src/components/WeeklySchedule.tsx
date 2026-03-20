@@ -963,6 +963,15 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
   const { googleAccessToken, loginWithGoogle } = useAuth();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
 
+  useEffect(() => {
+    if (viewMode === "month") {
+      const today = new Date();
+      setCurrentMonday(new Date(today.getFullYear(), today.getMonth(), 1));
+    } else {
+      setCurrentMonday(getMonday(new Date()));
+    }
+  }, [viewMode]);
+
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
 
   // Active projects allocations summary
@@ -985,8 +994,13 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
   }, [scheduleState.entries, cardsState.cards]);
 
   const weekDays = useMemo(() => {
-    const daysCount = viewMode === "month" ? 28 : 5;
-    return Array.from({ length: daysCount }, (_, i) => addDays(currentMonday, i));
+    if (viewMode === "month") {
+      const y = currentMonday.getFullYear();
+      const m = currentMonday.getMonth();
+      const daysCount = new Date(y, m + 1, 0).getDate(); // days in month
+      return Array.from({ length: daysCount }, (_, i) => addDays(currentMonday, i));
+    }
+    return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
   }, [currentMonday, viewMode]);
 
   const goToPrevPeriod = () => setCurrentMonday((m) => addDays(m, -7));
@@ -1047,7 +1061,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
             </Button>
             <span className="text-sm font-semibold font-heading ml-1">
               {viewMode === "month" 
-                ? `${String(weekDays[0].getDate()).padStart(2, '0')}/${String(weekDays[0].getMonth() + 1).padStart(2, '0')} - ${String(weekDays[27].getDate()).padStart(2, '0')}/${String(weekDays[27].getMonth() + 1).padStart(2, '0')}` 
+                ? `${String(weekDays[0].getDate()).padStart(2, '0')}/${String(weekDays[0].getMonth() + 1).padStart(2, '0')} - ${String(weekDays[weekDays.length - 1].getDate()).padStart(2, '0')}/${String(weekDays[weekDays.length - 1].getMonth() + 1).padStart(2, '0')}` 
                 : formatWeekRange(currentMonday)}
             </span>
           </div>
@@ -1082,7 +1096,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                     key={formatDate(day)}
                     className={`text-center py-2 border-b border-l border-border 
                       ${viewMode === "month" ? "min-w-[40px] px-0.5" : "min-w-[140px] px-2"} 
-                      ${isToday ? "bg-primary/20" : isWeekend ? "bg-black/20" : "bg-card/40"}`}
+                      ${isToday ? "bg-primary/20" : isWeekend ? "bg-slate-400/20" : "bg-card/40"}`}
                   >
                     <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
                       <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" ? "text-[8px]" : "text-[10px]"}`}>
@@ -1133,7 +1147,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                     return (
                       <td
                         key={dateStr}
-                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : isWeekend ? "bg-black/10" : ""
+                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : isWeekend ? "bg-slate-400/10" : ""
                           }`}
                         style={{ zIndex: 10 - dayIdx }}
                       >
