@@ -147,16 +147,16 @@ function BadgeSlot({ value, onChange }: { value: string | null; onChange: (id: s
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className={`w-10 h-10 rounded flex items-center justify-center border transition-all duration-200
+          className={`w-[44px] h-[44px] rounded flex items-center justify-center border transition-all duration-200
             ${badge
-              ? "border-white/40 text-white bg-white/10 hover:bg-white/15"
+              ? "border-white/40 text-white bg-white/10 hover:bg-white/15 shadow-sm"
               : "border-dashed border-white/20 text-white/30 hover:border-white/50 hover:bg-white/5"
             }`}
           title={badge?.label || "Adicionar símbolo"}
         >
           {badge
-            ? <span className="w-7 h-7 block">{badge.icon}</span>
-            : <span className="text-[18px] leading-none font-light select-none">+</span>
+            ? <span className="w-8 h-8 block">{badge.icon}</span>
+            : <span className="text-[20px] leading-none font-light select-none">+</span>
           }
         </button>
       </PopoverTrigger>
@@ -205,7 +205,7 @@ function formatDateShort(d: Date): string {
 }
 
 const DAYS_IN_VIEW = 14; // show 2 weeks at a time
-const LABEL_W = 240;     // px for label column (increased to fit larger icons)
+const LABEL_W = 220;     // px for label column (resized to minimize extra space)
 
 // ─── Row — one project timeline row ──────────────────────────────
 const TIMELINE_Y = 80; // px from row top to the horizontal line
@@ -247,10 +247,10 @@ function TimelineRow({
         style={{ width: `${LABEL_W}px` }}
       >
         <div>
-          <span className="text-[11px] font-bold font-heading uppercase tracking-wide text-white leading-tight block">
+          <span className="text-[13px] font-bold font-heading uppercase tracking-wide text-white leading-tight block">
             {card.name}
           </span>
-          <span className="text-[9px] text-white/40 uppercase tracking-widest font-semibold block">
+          <span className="text-[11px] text-white/40 uppercase tracking-widest font-semibold block">
             {card.client}
           </span>
         </div>
@@ -385,9 +385,14 @@ function TimelineRow({
 export default function ProjectTimelines() {
   const { state, updateCard } = useProjectCards();
 
-  const activeCards = state.cards.filter(
-    (c) => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO"
-  );
+  const activeCards = state.cards
+    .filter(
+      (c) => 
+        c.active !== false && 
+        c.name?.trim().toUpperCase() !== "PUB INTERNO" &&
+        c.showInTimeline !== false
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Navigation: base date = leftmost day in window
   const [baseDate, setBaseDate] = useState(() => addDays(new Date(), -3));

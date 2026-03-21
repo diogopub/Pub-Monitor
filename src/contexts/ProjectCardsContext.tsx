@@ -49,6 +49,7 @@ export interface ProjectCardData {
   dailyAllocations?: DailyAllocations;
   timelinePins?: TimelinePin[];
   badges?: string[];
+  showInTimeline?: boolean;
 }
 
 export interface FeedEntry {

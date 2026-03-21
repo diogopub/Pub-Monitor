@@ -365,7 +365,15 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
-            <div className="flex-1 flex justify-center">
+            <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+              <div className="flex items-center gap-1">
+                <Switch
+                  checked={card.showInTimeline !== false}
+                  onCheckedChange={(checked) => updateCard(card.id, { showInTimeline: checked })}
+                  className="scale-[0.55] origin-center data-[state=checked]:bg-primary/60"
+                />
+                <span className="text-[7px] font-bold uppercase tracking-tight text-muted-foreground/50">Timeline</span>
+              </div>
               <button
                 onClick={() => setShowDiarias(true)}
                 className="px-2.5 py-0.5 rounded border border-border bg-card font-semibold text-foreground hover:bg-secondary/80 transition-colors cursor-pointer text-[10px]"
