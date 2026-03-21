@@ -16,94 +16,110 @@ export interface BadgeDef {
 
 function IconRollerCoaster() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-      <path d="M2 17C2 17 4 10 9 10C12 10 13 13 16 13C19 13 22 10 22 10V14C22 14 19 17 16 17C13 17 12 14 9 14C6 14 4 17 4 17H2Z" />
-      <path d="M2 20H22V22H2Z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+      <path d="M22 18H2" />
+      <path d="M2 18C2 12 6 6 10 6s4 12 8 12 4-6 4-6" />
+      <rect x="8" y="4" width="2" height="2" rx="0.5" fill="currentColor" />
+      <rect x="15" y="10" width="2" height="2" rx="0.5" fill="currentColor" />
+      <line x1="6" y1="18" x2="6" y2="12" />
+      <line x1="14" y1="18" x2="14" y2="15" />
+      <line x1="18" y1="18" x2="18" y2="12" />
     </svg>
   );
 }
+
 function IconMoneyWings() {
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-      <ellipse cx="12" cy="12" rx="4" ry="3" />
-      <path d="M2 9C2 9 6 7 8 10C10 7 14 7 16 10C18 7 22 9 22 9L20 14C18 11 14 11 12 14C10 11 6 11 4 14L2 9Z" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
+      <rect x="6" y="9" width="12" height="7" rx="1" fill="currentColor" fillOpacity="0.2" />
+      <circle cx="12" cy="12.5" r="2" fill="currentColor" />
+      <path d="M6 11c-2-1-4 0-4 3 0 0 1 1 4-1M18 11c2-1 4 0 4 3 0 0-1 1-4-1" />
     </svg>
   );
 }
+
 function IconNoMoney() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
       <circle cx="12" cy="12" r="9" />
-      <line x1="4.2" y1="4.2" x2="19.8" y2="19.8" />
-      <path d="M12 8v2M12 14v2M10 10h3a1 1 0 010 2h-2a1 1 0 000 2h3" />
+      <line x1="4" y1="4" x2="20" y2="20" strokeWidth="2" stroke="currentColor" opacity="0.8" />
+      <path d="M9 10c1-1 2-1 3-1s2 0 3 1M9 14c1 1 2 1 3 1s2 0 3-1M12 8v8" />
     </svg>
   );
 }
+
 function IconBlackHole() {
+  // O "Buraco Negro" é a silhueta da pessoa de chapéu wide-brim
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-      <ellipse cx="12" cy="14" rx="8" ry="3" />
-      <path d="M5 8C5 8 7 4 12 4C17 4 19 8 19 8" strokeWidth="2" stroke="currentColor" fill="none" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full scale-[1.2]">
+      <path d="M12 11c-1.5 0-2.5 1-2.5 2s1 1.5 2.5 1.5 2.5-.5 2.5-1.5-1-2-2.5-2z" />
+      <path d="M20 14c0 1.5-3.5 3-8 3s-8-1.5-8-3 3.5-3 8-3 8 1.5 8 3z" />
     </svg>
   );
 }
+
 function IconFire() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-      <path d="M12 2C12 2 8 7 8 11C8 13 9 14 10 14C9 12 11 10 12 8C13 11 11 14 11 16C11 18.2 13 20 13 20C13 20 16 17.5 16 14C16 10 14 7 12 2Z" />
-      <path d="M10 20C10 20 8 19 8 16C8 14 10 13 11 15C11 17 10 20 10 20Z" />
+      <path d="M12 2c0 0-4 4.5-4 9a4 4 0 008 0c0-4.5-4-9-4-9zm-1 12.5c-.5-.5-1-1.5-1-2.5 0-1.5 1-2.5 1-2.5s1 1 1 2.5c0 1-.5 2-1 2.5z" />
     </svg>
   );
 }
+
 function IconXXL() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-full h-full">
-      <rect x="2" y="5" width="20" height="14" rx="1" />
-      <text x="12" y="16" textAnchor="middle" fontSize="9" fontWeight="bold" fill="currentColor" stroke="none" fontFamily="monospace">XXL</text>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-full h-full">
+      <rect x="2" y="6" width="20" height="12" rx="1.5" />
+      <text x="12" y="15.5" textAnchor="middle" fontSize="8" fontWeight="900" fill="currentColor" stroke="none" fontFamily="sans-serif" letterSpacing="-0.5">XXL</text>
     </svg>
   );
 }
+
 function IconPriority() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-full h-full">
-      <circle cx="12" cy="12" r="9" strokeDasharray="3 2" />
-      <text x="12" y="11" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor" stroke="none" fontFamily="monospace">PRIOR</text>
-      <text x="12" y="16" textAnchor="middle" fontSize="5.5" fontWeight="bold" fill="currentColor" stroke="none" fontFamily="monospace">ITY</text>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="7" strokeOpacity="0.5" />
+      <rect x="4" y="9.5" width="16" height="5" fill="black" stroke="none" />
+      <text x="12" y="13" textAnchor="middle" fontSize="3.5" fontWeight="900" fill="white" stroke="none" fontFamily="sans-serif">PRIORITY</text>
     </svg>
   );
 }
+
 function IconWarning() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+      <path d="M12 4L3 19h18L12 4zm.8 12.5h-1.6v-1.6h1.6v1.6zm0-3h-1.6V9h1.6v4.5z" />
     </svg>
   );
 }
+
 function IconHelmet() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-      <path d="M12 2C7.58 2 4 5.58 4 10v2h16v-2C20 5.58 16.42 2 12 2z" />
-      <rect x="3" y="12" width="18" height="3" rx="1" />
-      <path d="M8 15v1a4 4 0 008 0v-1" />
+      <path d="M12 4c-4 0-7 3-7 7v1h14v-1c0-4-3-7-7-7z" />
+      <rect x="4.5" y="11.5" width="15" height="1.5" rx="0.5" />
+      <path d="M9 13v1a3 3 0 006 0v-1" />
+      <circle cx="12" cy="7" r="1.5" stroke="var(--background)" strokeWidth="0.5" />
     </svg>
   );
 }
+
 function IconIsland() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-      <ellipse cx="12" cy="18" rx="8" ry="2.5" />
-      <path d="M13 18V10" stroke="currentColor" strokeWidth="1.5" fill="none" />
-      <path d="M13 10C13 10 10 8 9 5C11 5 14 8 14 8V10L16 6C16 6 18 9 15 11L13 10Z" />
+      <path d="M4 19c0-2 4-3.5 8-3.5s8 1.5 8 3.5-4 1.5-8 1.5-8-.5-8-1.5z" opacity="0.4" />
+      <path d="M12 16.5c-1-3-1-5-1-5s-3 0-5-2c0 0 3 0 5 2l1-4h.5l1 4c2-2 5-2 5-2-2 2-5 2-5 2s0 2-1 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
     </svg>
   );
 }
+
 function IconEye() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.2" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
     </svg>
   );
 }
@@ -131,16 +147,16 @@ function BadgeSlot({ value, onChange }: { value: string | null; onChange: (id: s
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
-          className={`w-7 h-7 rounded flex items-center justify-center border transition-colors
+          className={`w-10 h-10 rounded flex items-center justify-center border transition-all duration-200
             ${badge
-              ? "border-white/30 text-white bg-white/10"
-              : "border-dashed border-white/20 text-white/30 hover:border-white/50"
+              ? "border-white/40 text-white bg-white/10 hover:bg-white/15"
+              : "border-dashed border-white/20 text-white/30 hover:border-white/50 hover:bg-white/5"
             }`}
           title={badge?.label || "Adicionar símbolo"}
         >
           {badge
-            ? <span className="w-4 h-4 block">{badge.icon}</span>
-            : <span className="text-[14px] leading-none font-light select-none">+</span>
+            ? <span className="w-7 h-7 block">{badge.icon}</span>
+            : <span className="text-[18px] leading-none font-light select-none">+</span>
           }
         </button>
       </PopoverTrigger>
@@ -153,15 +169,15 @@ function BadgeSlot({ value, onChange }: { value: string | null; onChange: (id: s
             </button>
           )}
         </div>
-        <div className="space-y-0.5">
+        <div className="space-y-1">
           {BADGE_DEFS.map((b) => (
             <button
               key={b.id}
               onClick={() => { onChange(b.id); setOpen(false); }}
-              className={`w-full flex items-center gap-3 px-2 py-1.5 rounded hover:bg-accent/50 text-left transition-colors ${b.id === value ? "bg-accent/40" : ""}`}
+              className={`w-full flex items-center gap-4 px-3 py-2.5 rounded hover:bg-accent/50 text-left transition-colors ${b.id === value ? "bg-accent/40" : ""}`}
             >
-              <span className="w-4 h-4 shrink-0 block text-foreground">{b.icon}</span>
-              <span className="text-[11px] font-semibold tracking-wide uppercase text-foreground">{b.label}</span>
+              <span className="w-8 h-8 shrink-0 block text-foreground">{b.icon}</span>
+              <span className="text-[12px] font-bold tracking-wide uppercase text-foreground">{b.label}</span>
             </button>
           ))}
         </div>
@@ -189,7 +205,7 @@ function formatDateShort(d: Date): string {
 }
 
 const DAYS_IN_VIEW = 14; // show 2 weeks at a time
-const LABEL_W = 210;     // px for label column
+const LABEL_W = 240;     // px for label column (increased to fit larger icons)
 
 // ─── Row — one project timeline row ──────────────────────────────
 const TIMELINE_Y = 80; // px from row top to the horizontal line
