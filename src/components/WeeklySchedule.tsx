@@ -988,7 +988,8 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     const activeCards = cardsState.cards.filter(c => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO");
     const activeCardIds = new Set(activeCards.map(c => c.id));
     scheduleState.entries.forEach(entry => {
-      if (entry.projectId && activeCardIds.has(entry.projectId)) {
+      // Don't count "Entradas e Entregas" row in the daily allocation summaries
+      if (entry.projectId && entry.memberId !== "sr-entradas" && activeCardIds.has(entry.projectId)) {
         const dur = entry.duration || 1;
         summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + dur);
       }
