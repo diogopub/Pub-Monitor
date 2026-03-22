@@ -12,7 +12,7 @@ import { useState } from "react";
 const HERO_BG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663028612259/UjaCmpGqyhqDfLGyHgXxbB/pub-hero-bg-PtgN7HuB5WRginXUZ8sr6S.webp";
 
 export default function Home() {
-  const [sideCollapsed, setSideCollapsed] = useState(true);
+  const [sideCollapsed, setSideCollapsed] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeType, setSelectedNodeType] = useState<
     "member" | "project" | null
