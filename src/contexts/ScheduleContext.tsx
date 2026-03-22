@@ -32,7 +32,7 @@ export const ACTIVITY_TYPES: ActivityType[] = [
 
 export const ENTRADAS_ACTIVITIES: ActivityType[] = [
   { id: "apresentacao-cliente", label: "Apresentação Cliente", color: "#7c3aed", textColor: "#fff" },
-  { id: "entrega-pub", label: "Entrega PUB", color: "#2563eb", textColor: "#fff" },
+  { id: "entrega-pub", label: "Entrega PUB", color: "#737373", textColor: "#fff" },
   { id: "feedback-interno", label: "Feedback Interno", color: "#db2777", textColor: "#fff" },
 ];
 
