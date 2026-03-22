@@ -266,7 +266,7 @@ function ProjectPicker({
 // ─── Special activities for Entradas e Entregas row ──────────────
 const ENTRADAS_ACTIVITIES: ActivityType[] = [
   { id: "briefing", label: "BRIEFING", color: "#1a237e", textColor: "#fff" },
-  { id: "entrega-pub", label: "ENTREGA PUB", color: "#263238", textColor: "#fff" },
+  { id: "entrega-pub", label: "ENTREGA PUB", color: "#737373", textColor: "#fff" },
   { id: "apresentacao-cliente", label: "APRESENTAÇÃO CLIENTE", color: "#f9a825", textColor: "#000" },
 ];
 
@@ -358,14 +358,16 @@ function TaskBar({
       ref={barRef}
       draggable
       onDragStart={handleDragStart}
-      className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm ${isDragging ? "z-50 ring-2 ring-primary" : "z-10"} cursor-grab active:cursor-grabbing hover:-translate-y-[1px] transition-transform`}
+      className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm ${isDragging ? "z-50 ring-2 ring-primary" : "z-10"} 
+        ${act.id === "entrega-pub" ? "border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)]" : ""} 
+        cursor-grab active:cursor-grabbing hover:-translate-y-[1px] transition-transform`}
       style={{
         backgroundColor: act.color,
         color: act.textColor,
         top: `${slotIndex * 22 + 2}px`,
         left: startOffset === 0 ? '2px' : `calc(${startOffset * 100}% + 2px)`,
         width: `calc(${duration * 100}% - 4px + ${paddingCompensation}px)`,
-        height: '20px',
+        height: act.id === "entrega-pub" ? '18px' : '20px', // slightly smaller to account for border without growing row
       }}
       onClick={(e) => {
         e.stopPropagation();
