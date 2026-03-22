@@ -3,7 +3,7 @@
  * Quando um projeto é hovered no grafo, mostra o painel de Diárias desse projeto.
  */
 import { useState, useMemo } from "react";
-import { useNetwork } from "@/contexts/NetworkContext";
+import { useNetwork, type TeamMember } from "@/contexts/NetworkContext";
 import { useSchedule, ACTIVITY_TYPES } from "@/contexts/ScheduleContext";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ interface ScheduleFooterProps {
 
 export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, highlightMemberId }: ScheduleFooterProps) {
   const { state: networkState } = useNetwork();
-  const { state: scheduleState, getEntriesForCell } = useSchedule();
+  const { state: scheduleState, getEntriesForCell, getWeekRoster } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
   const [expanded, setExpanded] = useState(true);
@@ -89,14 +89,22 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
   );
 
   const today = formatDate(new Date());
+  const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
 
+  // Use the same roster logic as WeeklySchedule
   const rows = useMemo(() => {
-    return networkState.members.map((m) => ({
-      id: m.id,
-      name: m.name,
-      color: m.color,
-    }));
-  }, [networkState.members]);
+    const allMemberIds = networkState.members.map(m => m.id);
+    const rosterIds = getWeekRoster ? getWeekRoster(weekKey, allMemberIds) : allMemberIds;
+    
+    return rosterIds
+      .map(id => networkState.members.find(m => m.id === id))
+      .filter((m): m is TeamMember => !!m)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        color: m.color,
+      }));
+  }, [networkState.members, getWeekRoster, weekKey]);
 
   // Find hovered or selected project card
   const activeProjectId = selectedProjectId || hoveredProjectId;
