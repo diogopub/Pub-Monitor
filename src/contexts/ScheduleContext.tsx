@@ -157,6 +157,20 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, [user]);
 
+  // 🧹 EMERGENCY CLEANUP - Marcel / Nestlé / 2026-03-23
+  useEffect(() => {
+    if (state.entries.length > 0 && (currentUserRole === "admin" || currentUserRole === "editor")) {
+      const hasTarget = state.entries.some(e => e.memberId === "m4" && e.date === "2026-03-23" && e.projectId === "Kyx_zt5V");
+      if (hasTarget) {
+        console.log("Cleanup: Removendo entradas Nestlé do Marcel (23/03)");
+        updateState(s => ({
+          ...s,
+          entries: s.entries.filter(e => !(e.memberId === "m4" && e.date === "2026-03-23" && e.projectId === "Kyx_zt5V"))
+        }));
+      }
+    }
+  }, [state.entries.length, currentUserRole]);
+
   const updateState = useCallback((updater: (prev: ScheduleState) => ScheduleState) => {
     setStateInternal((prev) => {
       const next = updater(prev);
