@@ -1,17 +1,26 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  setDoc,
+  deleteDoc,
+  updateDoc,
+  writeBatch,
+  getDocs,
+} from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
 import { sanitizeForFirestore } from "@/lib/utils";
 
-// ─── Activity Types with exact colors from reference ─────────────
+// ─── Activity Types ───────────────────────────────────────────────
 export interface ActivityType {
   id: string;
   label: string;
-  color: string; // background color
-  textColor: string; // text color for contrast
+  color: string;
+  textColor: string;
 }
 
 export const ACTIVITY_TYPES: ActivityType[] = [
@@ -36,21 +45,21 @@ export const ENTRADAS_ACTIVITIES: ActivityType[] = [
   { id: "feedback-interno", label: "Feedback Interno", color: "#db2777", textColor: "#fff" },
 ];
 
-// ─── Schedule Entry ──────────────────────────────────────────────
+// ─── Schedule Entry ───────────────────────────────────────────────
 export interface ScheduleEntry {
   id: string;
-  memberId: string; // team member ID or special row ID
-  date: string; // ISO date string YYYY-MM-DD
-  activityId: string; // reference to ACTIVITY_TYPES
-  projectId?: string; // optional project reference
-  customLabel?: string; // optional custom label overriding project name + activity
-  duration?: number; // length in slots, where 1 slot = 1 column wide
-  slotIndex?: number; // 0, 1, or 2 for the vertical position
-  startOffset?: number; // 0 or 0.5 for half-slot horizontal positioning
-  googleEventIds?: string[]; // IDs of the events created in Google Calendar
+  memberId: string;
+  date: string;
+  activityId: string;
+  projectId?: string;
+  customLabel?: string;
+  duration?: number;
+  slotIndex?: number;
+  startOffset?: number;
+  googleEventIds?: string[];
 }
 
-// ─── Special Rows ────────────────────────────────────────────────
+// ─── Special Rows ─────────────────────────────────────────────────
 export interface SpecialRow {
   id: string;
   name: string;
@@ -58,14 +67,12 @@ export interface SpecialRow {
 }
 
 export const DEFAULT_SPECIAL_ROWS: SpecialRow[] = [
-  { "id": "sr-freelancer-1", "name": "Freelancer 1", "type": "freelancer" },
-  { "id": "sr-freelancer-2", "name": "Freelancer 2", "type": "freelancer" },
-  { "id": "sr-entradas", "name": "Entradas e Entregas", "type": "entradas-entregas" }
+  { id: "sr-freelancer-1", name: "Freelancer 1", type: "freelancer" },
+  { id: "sr-freelancer-2", name: "Freelancer 2", type: "freelancer" },
+  { id: "sr-entradas", name: "Entradas e Entregas", type: "entradas-entregas" },
 ];
 
-const DEFAULT_ENTRIES: ScheduleEntry[] = [];
-
-// ─── State ───────────────────────────────────────────────────────
+// ─── State ────────────────────────────────────────────────────────
 export interface ScheduleState {
   entries: ScheduleEntry[];
   specialRows: SpecialRow[];
@@ -87,30 +94,22 @@ interface ScheduleContextType {
   setWeekRoster: (weekKey: string, memberIds: string[]) => void;
 }
 
-const STORAGE_KEY = "pub-schedule-state";
+const ENTRIES_COLLECTION = "schedule_entries";
+const META_DOC = "schedule_meta";
+const STORAGE_KEY = "pub-schedule-state-v2";
 
-function loadState(): ScheduleState {
+function loadLocalState(): ScheduleState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed.entries)) {
-        // PREVENT INITIAL DUPLICATES
         const seen = new Set<string>();
-        const uniqueEntries = (parsed.entries as ScheduleEntry[]).filter((e) => {
-          // Deduplicate by ID
+        const uniqueEntries = (parsed.entries as ScheduleEntry[]).filter(e => {
           if (!e.id || seen.has(e.id)) return false;
-          
-          // Deduplicate by EXACT identical content (member, date, project, activity, slot, offset)
-          // This is a safety measure for corrupted data
-          const contentKey = `${e.memberId}-${e.date}-${e.projectId}-${e.activityId}-${e.slotIndex}-${e.startOffset}`;
-          if (seen.has(contentKey)) return false;
-          
           seen.add(e.id);
-          seen.add(contentKey);
           return true;
         });
-
         return {
           entries: uniqueEntries,
           specialRows: parsed.specialRows || DEFAULT_SPECIAL_ROWS,
@@ -121,14 +120,10 @@ function loadState(): ScheduleState {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
-  return {
-    entries: [],
-    specialRows: DEFAULT_SPECIAL_ROWS,
-    weeklyRosters: {},
-  };
+  return { entries: [], specialRows: DEFAULT_SPECIAL_ROWS, weeklyRosters: {} };
 }
 
-function saveState(state: ScheduleState) {
+function saveLocalState(state: ScheduleState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch { /* ignore */ }
@@ -137,239 +132,260 @@ function saveState(state: ScheduleState) {
 const ScheduleContext = createContext<ScheduleContextType | null>(null);
 
 export function ScheduleProvider({ children }: { children: React.ReactNode }) {
-  const [state, setStateInternal] = useState<ScheduleState>(loadState);
+  const [state, setStateInternal] = useState<ScheduleState>(loadLocalState);
   const { user } = useAuth();
   const { currentUserRole } = usePermissions();
-  const isSyncingFromCloud = useRef(false);
+  const canWrite = currentUserRole === "admin" || currentUserRole === "editor";
 
+  // ☁️ Sync entries
   useEffect(() => {
     if (!user) return;
-    const docRef = doc(db, "data", "schedule");
-    const unsub = onSnapshot(docRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const cloudData = snapshot.data() as ScheduleState;
-        isSyncingFromCloud.current = true;
-        setStateInternal(cloudData);
-        saveState(cloudData);
-        setTimeout(() => { isSyncingFromCloud.current = false; }, 100);
-      }
+    const entriesCol = collection(db, ENTRIES_COLLECTION);
+    return onSnapshot(entriesCol, (snapshot) => {
+      const entries: ScheduleEntry[] = [];
+      snapshot.forEach(d => {
+        const data = d.data() as ScheduleEntry;
+        if (data.id) entries.push(data);
+      });
+      setStateInternal(prev => {
+        const next = { ...prev, entries };
+        saveLocalState(next);
+        return next;
+      });
     });
-    return () => unsub();
   }, [user]);
 
-  // 🧹 EMERGENCY CLEANUP - Marcel / Nestlé / 2026-03-23
+  // ☁️ Sync meta
   useEffect(() => {
-    if (state.entries.length > 0 && (currentUserRole === "admin" || currentUserRole === "editor")) {
-      const hasTarget = state.entries.some(e => e.memberId === "m4" && e.date === "2026-03-23" && e.projectId === "Kyx_zt5V");
-      if (hasTarget) {
-        console.log("Cleanup: Removendo entradas Nestlé do Marcel (23/03)");
-        updateState(s => ({
-          ...s,
-          entries: s.entries.filter(e => !(e.memberId === "m4" && e.date === "2026-03-23" && e.projectId === "Kyx_zt5V"))
-        }));
-      }
-    }
-  }, [state.entries.length, currentUserRole]);
-
-  const updateState = useCallback((updater: (prev: ScheduleState) => ScheduleState) => {
-    setStateInternal((prev) => {
-      const next = updater(prev);
-      
-      // Keep local backup
-      saveState(next);
-      
-      // Async push to Firestore (MOVE OUTSIDE THE UPDATER)
-      // We use a small delay or a separate call to ensure we're not inside the React update cycle
-      if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
-        // We can't await here, but we can launch it.
-        // Moving it to a separate task keeps the state updater pure.
-        Promise.resolve().then(() => {
-          setDoc(doc(db, "data", "schedule"), sanitizeForFirestore(next)).catch(err => {
-            console.error("Firestore sync error:", err);
-            // Optional: toast.error("Erro ao sincronizar com nuvem");
-          });
+    if (!user) return;
+    const metaRef = doc(db, "data", META_DOC);
+    return onSnapshot(metaRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const meta = snapshot.data();
+        setStateInternal(prev => {
+          const next = {
+            ...prev,
+            specialRows: meta.specialRows || DEFAULT_SPECIAL_ROWS,
+            weeklyRosters: meta.weeklyRosters || {},
+          };
+          saveLocalState(next);
+          return next;
         });
       }
-      
-      return next;
     });
-  }, [currentUserRole]);
+  }, [user]);
 
-  const removeEntry = useCallback(
-    (id: string) => {
-      updateState((s) => ({
-        ...s,
-        entries: s.entries.filter((e) => e.id !== id),
-      }));
+  // Operations
+  const addEntry = useCallback(
+    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string) => {
+      const newId = id || nanoid(8);
+      
+      setStateInternal(prev => {
+        // Optimistic check for duplicates
+        const isDuplicate = prev.entries.some(e =>
+          e.memberId === memberId && e.date === date && e.projectId === projectId && e.activityId === activityId &&
+          (slotIndex === undefined || e.slotIndex === slotIndex)
+        );
+        if (isDuplicate) return prev;
+
+        // Auto-detect slot locally for instant UI response
+        const memberEntries = prev.entries.filter(e => e.memberId === memberId);
+        const takenSlots = new Set<number>();
+        const targetDate = new Date(date + "T12:00:00Z");
+        memberEntries.forEach(e => {
+          const dStart = new Date(e.date + "T12:00:00Z");
+          const dEnd = new Date(e.date + "T12:00:00Z");
+          dEnd.setDate(dEnd.getDate() + Math.ceil(e.duration || 1) - 1);
+          if (targetDate >= dStart && targetDate <= dEnd) takenSlots.add(e.slotIndex || 0);
+        });
+        let autoSlot = 0;
+        while (takenSlots.has(autoSlot) && autoSlot < 10) autoSlot++;
+
+        const newEntry: ScheduleEntry = {
+          id: newId,
+          memberId, date, activityId, projectId, customLabel,
+          duration: duration ?? 1,
+          slotIndex: slotIndex ?? autoSlot,
+          startOffset: startOffset ?? 0,
+        };
+
+        // Firestore write moved outside pure state updater via Promise
+        if (canWrite) {
+          Promise.resolve().then(() => {
+            setDoc(doc(db, ENTRIES_COLLECTION, newId), sanitizeForFirestore(newEntry))
+              .catch(err => console.error("Firestore addEntry error:", err));
+          });
+        }
+
+        const next = { ...prev, entries: [...prev.entries, newEntry] };
+        saveLocalState(next);
+        return next;
+      });
     },
-    [updateState]
+    [canWrite]
   );
 
   const updateEntry = useCallback((id: string, updates: Partial<ScheduleEntry>) => {
-    updateState((s) => ({
-      ...s,
-      entries: s.entries.map(e => e.id === id ? { ...e, ...updates } : e),
-    }));
-  }, [updateState]);
-
-  const removeEntriesByCell = useCallback(
-    (memberId: string, date: string) => {
-      updateState((s) => ({
-        ...s,
-        entries: s.entries.filter((e) => !(e.memberId === memberId && e.date === date)),
-      }));
-    },
-    [updateState]
-  );
-
-  const getEntriesForCell = useCallback(
-    (memberId: string, date: string) => {
-      // Return entries for this cell, ensuring we don't return duplicates even if they exist in state
-      const cellEntries = state.entries.filter((e) => e.memberId === memberId && e.date === date);
-      // Optional: Deduplicate by ID just in case
-      const seen = new Set();
-      return cellEntries.filter(e => {
-        if (seen.has(e.id)) return false;
-        seen.add(e.id);
-        return true;
-      });
-    },
-    [state.entries]
-  );
-
-  const addEntry = useCallback(
-    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string) => {
-      updateState((s) => {
-        // PREVENT EXACT DUPLICATES (same project, member, date, activity)
-        // This stops the '3 repetidos' issue if they are truly identical content.
-        const isDuplicate = s.entries.some(e => 
-          e.memberId === memberId && 
-          e.date === date && 
-          e.projectId === projectId && 
-          e.activityId === activityId &&
-          (slotIndex === undefined || e.slotIndex === slotIndex)
-        );
-        if (isDuplicate) return s;
-
-        const memberEntries = s.entries.filter(e => e.memberId === memberId);
-        const takenSlots = new Set<number>();
-        const targetDate = new Date(date + "T12:00:00Z");
-
-        memberEntries.forEach(e => {
-          const dStart = new Date(e.date + "T12:00:00Z");
-          const dur = e.duration || 1;
-          const dEnd = new Date(e.date + "T12:00:00Z");
-          dEnd.setDate(dEnd.getDate() + Math.ceil(dur) - 1);
-
-          if (targetDate >= dStart && targetDate <= dEnd) {
-            takenSlots.add(e.slotIndex || 0);
-          }
+    setStateInternal(prev => {
+      const next = {
+        ...prev,
+        entries: prev.entries.map(e => e.id === id ? { ...e, ...updates } : e),
+      };
+      saveLocalState(next);
+      if (canWrite) {
+        Promise.resolve().then(() => {
+          updateDoc(doc(db, ENTRIES_COLLECTION, id), sanitizeForFirestore(updates))
+            .catch(err => console.error("Firestore updateEntry error:", err));
         });
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-        let autoSlot = 0;
-        while (takenSlots.has(autoSlot) && autoSlot < 10) autoSlot++; // increased max slots to find free one
+  const removeEntry = useCallback((id: string) => {
+    setStateInternal(prev => {
+      const next = { ...prev, entries: prev.entries.filter(e => e.id !== id) };
+      saveLocalState(next);
+      if (canWrite) {
+        Promise.resolve().then(() => {
+          deleteDoc(doc(db, ENTRIES_COLLECTION, id))
+            .catch(err => console.error("Firestore removeEntry error:", err));
+        });
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-        const newEntry: ScheduleEntry = { 
-          id: id || nanoid(8), 
-          memberId, 
-          date, 
-          activityId, 
-          projectId, 
-          customLabel, 
-          duration: duration ?? 1, 
-          slotIndex: slotIndex ?? autoSlot, 
-          startOffset: startOffset ?? 0 
-        };
+  const removeEntriesByCell = useCallback((memberId: string, date: string) => {
+    setStateInternal(prev => {
+      const toRemove = prev.entries.filter(e => e.memberId === memberId && e.date === date);
+      const next = { ...prev, entries: prev.entries.filter(e => !(e.memberId === memberId && e.date === date)) };
+      saveLocalState(next);
+      if (canWrite && toRemove.length > 0) {
+        Promise.resolve().then(() => {
+          const batch = writeBatch(db);
+          toRemove.forEach(e => batch.delete(doc(db, ENTRIES_COLLECTION, e.id)));
+          batch.commit().catch(err => console.error("Firestore removeEntriesByCell error:", err));
+        });
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-        return {
-          ...s,
-          entries: [...s.entries, newEntry],
-        };
-      });
-    },
-    [updateState]
-  );
+  const getEntriesForCell = useCallback((memberId: string, date: string): ScheduleEntry[] => {
+    const seen = new Set<string>();
+    return state.entries.filter(e => {
+      if (e.memberId !== memberId || e.date !== date) return false;
+      if (seen.has(e.id)) return false;
+      seen.add(e.id);
+      return true;
+    });
+  }, [state.entries]);
 
-  const addSpecialRow = useCallback(
-    (name: string, type: SpecialRow["type"]) => {
-      updateState((s) => ({
-        ...s,
-        specialRows: [...s.specialRows, { id: nanoid(8), name, type }],
-      }));
-    },
-    [updateState]
-  );
+  const addSpecialRow = useCallback((name: string, type: SpecialRow["type"]) => {
+    setStateInternal(prev => {
+      const newRow = { id: nanoid(8), name, type };
+      const next = { ...prev, specialRows: [...prev.specialRows, newRow] };
+      saveLocalState(next);
+      if (canWrite) {
+        setDoc(doc(db, "data", META_DOC), sanitizeForFirestore({
+          specialRows: next.specialRows,
+          weeklyRosters: next.weeklyRosters,
+        })).catch(console.error);
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-  const removeSpecialRow = useCallback(
-    (id: string) => {
-      updateState((s) => ({
-        ...s,
-        specialRows: s.specialRows.filter((r) => r.id !== id),
-        entries: s.entries.filter((e) => e.memberId !== id),
-      }));
-    },
-    [updateState]
-  );
+  const removeSpecialRow = useCallback((id: string) => {
+    setStateInternal(prev => {
+      const toRemove = prev.entries.filter(e => e.memberId === id);
+      const next = {
+        ...prev,
+        specialRows: prev.specialRows.filter(r => r.id !== id),
+        entries: prev.entries.filter(e => e.memberId !== id)
+      };
+      saveLocalState(next);
+      if (canWrite) {
+        const batch = writeBatch(db);
+        toRemove.forEach(e => batch.delete(doc(db, ENTRIES_COLLECTION, e.id)));
+        batch.set(doc(db, "data", META_DOC), sanitizeForFirestore({
+          specialRows: next.specialRows,
+          weeklyRosters: next.weeklyRosters,
+        }));
+        batch.commit().catch(console.error);
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-  const updateSpecialRow = useCallback(
-    (id: string, name: string) => {
-      updateState((s) => ({
-        ...s,
-        specialRows: s.specialRows.map((r) => (r.id === id ? { ...r, name } : r)),
-      }));
-    },
-    [updateState]
-  );
+  const updateSpecialRow = useCallback((id: string, name: string) => {
+    setStateInternal(prev => {
+      const next = { ...prev, specialRows: prev.specialRows.map(r => r.id === id ? { ...r, name } : r) };
+      saveLocalState(next);
+      if (canWrite) {
+        setDoc(doc(db, "data", META_DOC), sanitizeForFirestore({
+          specialRows: next.specialRows,
+          weeklyRosters: next.weeklyRosters,
+        })).catch(console.error);
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-  const getWeekRoster = useCallback(
-    (weekKey: string, allMemberIds: string[]): string[] => {
-      const rosters = state.weeklyRosters || {};
-      if (rosters[weekKey]) return rosters[weekKey];
-      const editedKeys = Object.keys(rosters).filter((k) => k < weekKey);
-      if (editedKeys.length === 0) return allMemberIds;
-      editedKeys.sort((a, b) => (a > b ? -1 : 1));
-      return rosters[editedKeys[0]];
-    },
-    [state.weeklyRosters]
-  );
+  const getWeekRoster = useCallback((weekKey: string, allMemberIds: string[]): string[] => {
+    const rosters = state.weeklyRosters || {};
+    if (rosters[weekKey]) return rosters[weekKey];
+    const editedKeys = Object.keys(rosters).filter(k => k < weekKey).sort((a, b) => (a > b ? -1 : 1));
+    return editedKeys.length > 0 ? rosters[editedKeys[0]] : allMemberIds;
+  }, [state.weeklyRosters]);
 
-  const setWeekRoster = useCallback(
-    (weekKey: string, memberIds: string[]) => {
-      updateState((s) => ({
-        ...s,
-        weeklyRosters: { ...s.weeklyRosters, [weekKey]: memberIds },
-      }));
-    },
-    [updateState]
-  );
+  const setWeekRoster = useCallback((weekKey: string, memberIds: string[]) => {
+    setStateInternal(prev => {
+      const next = { ...prev, weeklyRosters: { ...prev.weeklyRosters, [weekKey]: memberIds } };
+      saveLocalState(next);
+      if (canWrite) {
+        setDoc(doc(db, "data", META_DOC), sanitizeForFirestore({
+          specialRows: next.specialRows,
+          weeklyRosters: next.weeklyRosters,
+        })).catch(console.error);
+      }
+      return next;
+    });
+  }, [canWrite]);
 
-  const setStateBulk = useCallback((newState: ScheduleState) => {
-    const validatedState: ScheduleState = {
+  const setState = useCallback(async (newState: ScheduleState) => {
+    const validated: ScheduleState = {
       entries: newState.entries || [],
       specialRows: newState.specialRows || DEFAULT_SPECIAL_ROWS,
       weeklyRosters: newState.weeklyRosters || {},
     };
-    saveState(validatedState);
-    setStateInternal(validatedState);
-  }, []);
+    if (canWrite) {
+      try {
+        const existing = await getDocs(collection(db, ENTRIES_COLLECTION));
+        const deleteBatch = writeBatch(db);
+        existing.forEach(d => deleteBatch.delete(d.ref));
+        await deleteBatch.commit();
+        const addBatch = writeBatch(db);
+        validated.entries.forEach(e => {
+          addBatch.set(doc(db, ENTRIES_COLLECTION, e.id), sanitizeForFirestore(e));
+        });
+        await addBatch.commit();
+        await setDoc(doc(db, "data", META_DOC), sanitizeForFirestore({
+          specialRows: validated.specialRows,
+          weeklyRosters: validated.weeklyRosters,
+        }));
+      } catch (err) { console.error("Bulk setState error:", err); }
+    }
+    saveLocalState(validated);
+    setStateInternal(validated);
+  }, [canWrite]);
 
   return (
-    <ScheduleContext.Provider
-      value={{
-        state,
-        addEntry,
-        updateEntry,
-        removeEntry,
-        removeEntriesByCell,
-        getEntriesForCell,
-        addSpecialRow,
-        removeSpecialRow,
-        updateSpecialRow,
-        setState: setStateBulk,
-        getWeekRoster,
-        setWeekRoster,
-      }}
-    >
+    <ScheduleContext.Provider value={{
+      state, addEntry, updateEntry, removeEntry, removeEntriesByCell, getEntriesForCell,
+      addSpecialRow, removeSpecialRow, updateSpecialRow, setState, getWeekRoster, setWeekRoster,
+    }}>
       {children}
     </ScheduleContext.Provider>
   );

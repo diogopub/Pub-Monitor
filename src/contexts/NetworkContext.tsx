@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
 import { sanitizeForFirestore } from "@/lib/utils";
@@ -170,10 +170,9 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<NetworkState>(loadState);
   const { user } = useAuth();
   const { currentUserRole } = usePermissions();
-  const isInitialMount = useRef(true);
-  const isSyncingFromCloud = useRef(false);
+  const canWrite = currentUserRole === "admin" || currentUserRole === "editor";
 
-  // ☁️ SYNC FROM CLOUD
+  // ☁️ SYNC FROM CLOUD — real-time listener, merges into local state
   useEffect(() => {
     if (!user) return;
 
@@ -181,10 +180,8 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     const unsub = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
         const cloudData = snapshot.data() as NetworkState;
-        isSyncingFromCloud.current = true;
         setStateInternal(cloudData);
-        saveState(cloudData); // Keeps local backup
-        setTimeout(() => { isSyncingFromCloud.current = false; }, 100);
+        saveState(cloudData);
       }
     });
 
@@ -192,22 +189,28 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   // ☁️ SYNC TO CLOUD
+  // Uses setDoc with merge:false but only after computing the full next state.
+  // For per-field concurrent safety, we pass the whole document.
+  // NetworkContext changes (members/projects) are infrequent enough that
+  // full-document write is acceptable here. Entries (ScheduleContext) use
+  // subcollections for true concurrent safety.
   const updateState = useCallback((updater: (prev: NetworkState) => NetworkState) => {
     setStateInternal((prev) => {
       const next = updater(prev);
       saveState(next);
 
-      // Only push to cloud if NOT currently receiving an update FROM cloud
-      // and if user has permission to edit
-      if (!isSyncingFromCloud.current && (currentUserRole === "admin" || currentUserRole === "editor")) {
-        setDoc(doc(db, "data", "network"), sanitizeForFirestore(next)).catch(err => {
-          console.error("Erro ao salvar no Firestore:", err);
+      if (canWrite) {
+        // Use Promise.resolve to move Firestore write out of React's state updater
+        Promise.resolve().then(() => {
+          setDoc(doc(db, "data", "network"), sanitizeForFirestore(next)).catch(err => {
+            console.error("Network sync error:", err);
+          });
         });
       }
 
       return next;
     });
-  }, [currentUserRole]);
+  }, [canWrite]);
 
   const addMember = useCallback(
     (name: string, role: MemberRole, color: string, email?: string) => {
@@ -322,8 +325,13 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       };
       saveState(validatedState);
       setStateInternal(validatedState);
+      if (canWrite) {
+        setDoc(doc(db, "data", "network"), sanitizeForFirestore(validatedState)).catch(err => {
+          console.error("Network bulk setState error:", err);
+        });
+      }
     },
-    []
+    [canWrite]
   );
 
   const updateSettings = useCallback(

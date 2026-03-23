@@ -20,6 +20,7 @@ import { doc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useSchedule } from "@/contexts/ScheduleContext";
 import { toast } from "sonner";
+import { runMigration, type MigrationResult } from "@/lib/migration";
 import { 
   ShieldCheck, 
   Mail, 
@@ -31,7 +32,9 @@ import {
   Cloud,
   CalendarDays,
   Check,
-  UserX
+  UserX,
+  ArrowUpFromLine,
+  Loader2,
 } from "lucide-react";
 
 function ProjectCardsSection({ onOpenDialog }: { onOpenDialog: () => void }) {
@@ -122,31 +125,22 @@ function ProjectCardsSection({ onOpenDialog }: { onOpenDialog: () => void }) {
 }
 
 function CloudMigrationSection() {
-  const { state: networkState } = useNetwork();
-  const { state: scheduleState } = useSchedule();
-  const { state: cardsState } = useProjectCards();
   const { currentUserRole } = usePermissions();
-  const [isMigrating, setIsMigrating] = useState(false);
+  const [status, setStatus] = useState<"idle" | "running" | "done" | "error" | "already-migrated">("idle");
+  const [result, setResult] = useState<MigrationResult | null>(null);
 
   if (currentUserRole !== "admin") return null;
 
-  const handleMigration = async () => {
-    if (!confirm("Isso irá sobrescrever os dados na nuvem com seus dados locais atuais. Deseja continuar?")) return;
-    
-    setIsMigrating(true);
-    try {
-      await Promise.all([
-        setDoc(doc(db, "data", "network"), networkState),
-        setDoc(doc(db, "data", "schedule"), scheduleState),
-        setDoc(doc(db, "data", "cards"), cardsState),
-      ]);
-      toast.success("Migração para nuvem concluída!");
-    } catch (error) {
-      console.error("Migration error:", error);
-      toast.error("Erro na migração");
-    } finally {
-      setIsMigrating(false);
-    }
+  const handleMigrate = async () => {
+    if (!confirm("Isto vai migrar os dados para o novo formato de subcoleções. Seguro de rodar várias vezes. Continuar?")) return;
+    setStatus("running");
+    setResult(null);
+    const res = await runMigration();
+    setStatus(res.status);
+    setResult(res);
+    if (res.status === "done") toast.success("Migração concluída!");
+    else if (res.status === "already-migrated") toast.info(res.message);
+    else if (res.status === "error") toast.error(res.message);
   };
 
   return (
@@ -154,28 +148,44 @@ function CloudMigrationSection() {
       <div className="flex items-center gap-2 mb-6">
         <DatabaseZap className="w-5 h-5 text-amber-500" />
         <h2 className="text-lg font-bold font-heading tracking-wide">
-          Sincronização Forçada
+          Migração de Dados
         </h2>
       </div>
 
-      <div className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl p-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h3 className="text-sm font-bold text-amber-500 uppercase tracking-wider">Migrar Local p/ Nuvem</h3>
-            <p className="text-xs text-muted-foreground max-w-md">
-              Use este botão se os dados na nuvem estiverem vazios ou desatualizados e você queira enviar seu estado local atual como a nova verdade.
-            </p>
+      <div className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl p-6 space-y-4">
+        <p className="text-xs text-muted-foreground">
+          Migra dados para o formato de <strong>subcoleções</strong>, permitindo edição simultânea por múltiplos editores sem conflitos. Seguro de rodar múltiplas vezes.
+        </p>
+
+        <Button
+          onClick={handleMigrate}
+          disabled={status === "running"}
+          className="gap-2 w-full"
+          variant={status === "done" ? "outline" : "default"}
+        >
+          {status === "running" ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />Migrando...</>
+          ) : status === "done" ? (
+            <><Check className="w-4 h-4 text-green-500" />Migração Concluída</>
+          ) : (
+            <><DatabaseZap className="w-4 h-4" />Executar Migração</>
+          )}
+        </Button>
+
+        {result && (
+          <div className={`rounded-lg p-3 text-xs ${
+            result.status === "done" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
+            result.status === "already-migrated" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
+            "bg-red-500/10 text-red-400 border border-red-500/20"
+          }`}>
+            <p>{result.message}</p>
+            {result.stats && (
+              <p className="mt-1 opacity-70">
+                {result.stats.cardsMigrated} cards · {result.stats.entriesMigrated} entradas migradas
+              </p>
+            )}
           </div>
-          <Button 
-            variant="outline" 
-            className="border-amber-500/50 text-amber-500 hover:bg-amber-500/10 gap-2 shrink-0"
-            onClick={handleMigration}
-            disabled={isMigrating}
-          >
-            <DatabaseZap className="w-4 h-4" />
-            {isMigrating ? "Migrando..." : "Enviar p/ Nuvem"}
-          </Button>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -387,6 +397,7 @@ function PermissionsSettingsSection() {
     </section>
   );
 }
+
 
 function BackupSettingsSection() {
   const { state, updateSettings } = useNetwork();
