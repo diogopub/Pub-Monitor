@@ -22,6 +22,7 @@ const PIN_LABELS = [
   "FINAL 3D",
   "VÍDEO",
   "DESCRITIVO",
+  "APRESENTAÇÃO CLIENTE",
   "ORÇAMENTO",
   "OUTROS",
 ];

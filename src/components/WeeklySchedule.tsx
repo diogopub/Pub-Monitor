@@ -505,15 +505,14 @@ function ScheduleCell({
   };
 
   // ─── Handlers com sincronização Calendar ─────────────────────────
-  // 1. CRIAR
+  // 5. CRIAR
   const handleProjectSelect = async (projectId: string, customLabel?: string) => {
     if (!selectedActivity) return;
     if (isPastDate(date) && !window.confirm("Atenção: você está adicionando uma alocação em um dia que já passou. Deseja continuar?")) return;
     // Gera ID antecipadamente para poder salvar os IDs do GCal de volta
     const newId = nanoidLocal();
-    const autoSlot = entries.length;
-    // Cria com startOffset=0 → sempre manhã quando adicionado pelo popover
-    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 0.5, autoSlot, 0, newId);
+    // Deixa o slotIndex como undefined para o contexto calcular automaticamente o próximo livre
+    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 0.5, undefined, 0, newId);
 
     // Push imediato ao Google Calendar (startOffset=0 → manhã)
     const googleIds = await pushToCalendar(date, 0.5, 0, memberId, projectId, customLabel);
@@ -619,11 +618,18 @@ function ScheduleCell({
     if (entry && isPastDate(entry.date)) {
       if (!window.confirm("Atenção: você está excluindo uma alocação de um dia que já passou. Deseja continuar?")) return;
     }
+    
+    // CHAMAR REMOVE IMEDIATAMENTE PARA UX RÁPIDA
+    removeEntry(entryId);
+
     if (entry?.googleEventIds?.length) {
       const t = await ensureGoogleToken();
-      if (t) deleteEventsFromGoogleCalendar(entry.googleEventIds, t).catch(console.error);
+      if (t) {
+        deleteEventsFromGoogleCalendar(entry.googleEventIds, t).catch(err => {
+          console.error("GCal delete error:", err);
+        });
+      }
     }
-    removeEntry(entryId);
   };
 
   const handleClose = () => {
