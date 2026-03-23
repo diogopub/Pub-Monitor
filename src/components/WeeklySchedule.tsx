@@ -38,6 +38,8 @@ import {
   Search,
   Trash2,
   Calendar as CalendarIcon,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1035,6 +1037,18 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     setWeekRoster(weekKey, weekRosterIds.filter((id) => id !== memberId));
   }, [weekKey, weekRosterIds, setWeekRoster]);
 
+  // Reorder members in this week's roster (and future weeks)
+  const handleMoveMember = useCallback((memberId: string, direction: 'up' | 'down') => {
+    const idx = weekRosterIds.indexOf(memberId);
+    if (idx === -1) return;
+    const newRoster = [...weekRosterIds];
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= newRoster.length) return;
+    
+    [newRoster[idx], newRoster[targetIdx]] = [newRoster[targetIdx], newRoster[idx]];
+    setWeekRoster(weekKey, newRoster);
+  }, [weekKey, weekRosterIds, setWeekRoster]);
+
   // All rows: team members (from per-week roster) + special rows
   const rows = useMemo(() => {
     // Only members present in this week's roster, preserving roster order
@@ -1100,7 +1114,10 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
           <thead>
             <tr>
               <th className="w-[120px] text-left px-3 py-2 text-[10px] border-b border-border bg-card/40 sticky left-0 z-10 w-fit">
-                <AddMemberPopover weekKey={weekKey} weekRosterIds={weekRosterIds} />
+                <div className="flex items-center gap-2">
+                  <AddMemberPopover weekKey={weekKey} weekRosterIds={weekRosterIds} />
+                  <AddMemberToWeekPopover weekKey={weekKey} currentRoster={weekRosterIds} allMembers={networkState.members} />
+                </div>
               </th>
               {weekDays.map((day) => {
                 const { day: dayNum, weekday } = formatDayHeader(day);
@@ -1127,27 +1144,50 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {rows.map((row, rowIdx) => {
               const isEntrada = row.type === "entradas-entregas";
+              const isMember = row.type === "member";
+              const canMoveUp = isMember && rowIdx > 0 && rows[rowIdx - 1]?.type === "member";
+              const canMoveDown = isMember && rowIdx < rows.length - 1 && rows[rowIdx + 1]?.type === "member";
+
               return (
                 <tr key={row.id} className={`group/row hover:bg-accent/10 transition-colors ${isEntrada ? "min-h-[64px]" : ""}`}>
-                  <td className={`px-3 border-b border-border bg-card/30 sticky left-0 z-10 w-fit ${isEntrada ? "py-3" : "py-1.5"}`}>
+                  <td className={`px-2 border-b border-border bg-card/30 sticky left-0 z-10 w-fit ${isEntrada ? "py-3" : "py-1.5"}`}>
                     <div className="flex items-center gap-1 group/rowlabel">
+                      {/* Move Controls */}
+                      <div className="flex flex-col -space-y-1 mr-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleMoveMember(row.id, 'up')}
+                          disabled={!canMoveUp}
+                          className={`hover:text-primary transition-colors disabled:opacity-0 ${!canMoveUp ? 'pointer-events-none' : ''}`}
+                        >
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveMember(row.id, 'down')}
+                          disabled={!canMoveDown}
+                          className={`hover:text-primary transition-colors disabled:opacity-0 ${!canMoveDown ? 'pointer-events-none' : ''}`}
+                        >
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+
                       <EditMemberPopover member={row}>
-                        <button className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left">
+                        <button className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer flex-1 text-left min-w-0">
                           <div
-                            className="w-2 h-2 rounded-full shrink-0"
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ backgroundColor: row.color }}
                           />
-                          <span className={`text-xs font-medium ${isEntrada ? "whitespace-normal max-w-[70px]" : "truncate max-w-[70px]"}`}>
+                          <span className={`text-[11px] font-semibold tracking-tight ${isEntrada ? "whitespace-normal max-w-[65px]" : "truncate max-w-[65px]"}`}>
                             {row.name}
                           </span>
                         </button>
                       </EditMemberPopover>
-                      {row.type === "member" && (
+                      
+                      {isMember && (
                         <button
                           onClick={() => handleRemoveMemberFromWeek(row.id)}
-                          className="opacity-0 group-hover/rowlabel:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+                          className="opacity-0 group-hover/rowlabel:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 ml-auto"
                           title="Remover desta semana"
                         >
                           <X className="w-3 h-3" />
