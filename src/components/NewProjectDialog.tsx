@@ -5,6 +5,7 @@ import { useState } from "react";
 import { nanoid } from "nanoid";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { useSchedule } from "@/contexts/ScheduleContext";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +22,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 
 const ROLE_STYLES: Record<string, { bg: string; label: string; networkRole: string }> = {
   criacao: { bg: "#dc2626", label: "CRIAÇÃO", networkRole: "creative" },
   arq: { bg: "#16a34a", label: "ARQ", networkRole: "architect" },
   "3d": { bg: "#2563eb", label: "3D", networkRole: "3d" },
 };
+
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
 interface TeamSlot {
   role: "criacao" | "arq" | "3d";
@@ -43,6 +53,7 @@ export default function NewProjectDialog({
 }) {
   const { addCard } = useProjectCards();
   const { state: networkState } = useNetwork();
+  const { getWeekRoster } = useSchedule();
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
   const [entryDate, setEntryDate] = useState("");
@@ -52,6 +63,7 @@ export default function NewProjectDialog({
     { role: "arq", name: "" },
     { role: "3d", name: "" },
   ]);
+  const [customSlotIndices, setCustomSlotIndices] = useState<Set<number>>(new Set());
 
   const handleSubmit = () => {
     if (!name.trim()) return;
@@ -81,8 +93,16 @@ export default function NewProjectDialog({
     onOpenChange(false);
   };
 
-  const getMembersForRole = (_role: string) => {
-    return networkState.members;
+  const getMembersForRole = (role: string) => {
+    const monday = getMonday(new Date());
+    const weekKey = monday.toISOString().split("T")[0];
+    const allIds = networkState.members.map(m => m.id);
+    const rosterIds = getWeekRoster(weekKey, allIds);
+    const networkRole = ROLE_STYLES[role]?.networkRole;
+
+    return networkState.members
+      .filter(m => rosterIds.includes(m.id))
+      .filter(m => (m as any).role === networkRole);
   };
 
   return (
@@ -159,25 +179,69 @@ export default function NewProjectDialog({
                     >
                       {style.label}
                     </span>
-                    <Select
-                      value={slot.name}
-                      onValueChange={(v) => {
-                        const newSlots = [...teamSlots];
-                        newSlots[idx] = { ...slot, name: v };
-                        setTeamSlots(newSlots);
-                      }}
-                    >
-                      <SelectTrigger className="flex-1 h-8 text-xs">
-                        <SelectValue placeholder="Nome" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map((m) => (
-                          <SelectItem key={m.id} value={m.name}>
-                            {m.name}
+                    {customSlotIndices.has(idx) ? (
+                      <div className="relative flex-1">
+                        <Input
+                          value={slot.name}
+                          onChange={(e) => {
+                            const newSlots = [...teamSlots];
+                            newSlots[idx] = { ...slot, name: e.target.value };
+                            setTeamSlots(newSlots);
+                          }}
+                          placeholder="Digite o nome..."
+                          className="h-8 text-[10px] md:text-[10px] font-bold font-heading uppercase tracking-wider bg-primary/10 border-primary/30"
+                          autoFocus
+                        />
+                        <button 
+                          onClick={() => {
+                            const newCustom = new Set(customSlotIndices);
+                            newCustom.delete(idx);
+                            setCustomSlotIndices(newCustom);
+                            const newSlots = [...teamSlots];
+                            newSlots[idx] = { ...slot, name: "" };
+                            setTeamSlots(newSlots);
+                          }}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <Select
+                        value={slot.name || "__empty__"}
+                        onValueChange={(v) => {
+                          if (v === "__custom__") {
+                            const newCustom = new Set(customSlotIndices);
+                            newCustom.add(idx);
+                            setCustomSlotIndices(newCustom);
+                            const newSlots = [...teamSlots];
+                            newSlots[idx] = { ...slot, name: "" };
+                            setTeamSlots(newSlots);
+                          } else {
+                            const newSlots = [...teamSlots];
+                            newSlots[idx] = { ...slot, name: v === "__empty__" ? "" : v };
+                            setTeamSlots(newSlots);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="flex-1 h-8 text-[10px] md:text-[10px] font-bold font-heading uppercase tracking-wider">
+                          <SelectValue placeholder="Escolher..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__empty__">
+                            <span className="italic opacity-60">Personalizado</span>
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          <SelectItem value="__custom__">
+                            <span className="font-bold text-primary">✏️ Escrever nome...</span>
+                          </SelectItem>
+                          {members.map((m) => (
+                            <SelectItem key={m.id} value={m.name}>
+                              {m.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 );
               })}

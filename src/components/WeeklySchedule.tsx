@@ -987,7 +987,7 @@ function AddMemberToWeekPopover({
   );
 }
 
-export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week" | "month" }) {
+export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week" | "fortnight" | "month" }) {
   const { state: networkState } = useNetwork();
   const { state: scheduleState, getWeekRoster, setWeekRoster } = useSchedule();
   const { state: cardsState } = useProjectCards();
@@ -998,6 +998,8 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     if (viewMode === "month") {
       const today = new Date();
       setCurrentMonday(new Date(today.getFullYear(), today.getMonth(), 1));
+    } else if (viewMode === "fortnight") {
+      setCurrentMonday(getMonday(new Date()));
     } else {
       setCurrentMonday(getMonday(new Date()));
     }
@@ -1031,6 +1033,9 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       const m = currentMonday.getMonth();
       const daysCount = new Date(y, m + 1, 0).getDate(); // days in month
       return Array.from({ length: daysCount }, (_, i) => addDays(currentMonday, i));
+    }
+    if (viewMode === "fortnight") {
+      return Array.from({ length: 15 }, (_, i) => addDays(currentMonday, i));
     }
     return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
   }, [currentMonday, viewMode]);
@@ -1104,7 +1109,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
               <ChevronRight className="w-4 h-4" />
             </Button>
             <span className="text-sm font-semibold font-heading ml-1">
-              {viewMode === "month" 
+              {viewMode === "month" || viewMode === "fortnight"
                 ? `${String(weekDays[0].getDate()).padStart(2, '0')}/${String(weekDays[0].getMonth() + 1).padStart(2, '0')} - ${String(weekDays[weekDays.length - 1].getDate()).padStart(2, '0')}/${String(weekDays[weekDays.length - 1].getMonth() + 1).padStart(2, '0')}` 
                 : formatWeekRange(currentMonday)}
             </span>
@@ -1124,8 +1129,8 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       </div>
 
       {/* Grid */}
-      <div className={`overflow-x-auto ${viewMode === "month" ? "" : ""}`}>
-        <table className={`w-full border-collapse ${viewMode === "month" ? "min-w-0" : "min-w-[700px]"}`}>
+      <div className={`overflow-x-auto ${viewMode === "month" || viewMode === "fortnight" ? "" : ""}`}>
+        <table className={`w-full border-collapse ${viewMode === "month" || viewMode === "fortnight" ? "min-w-0" : "min-w-[700px]"}`}>
           <thead>
             <tr>
               <th className="w-[120px] text-left px-3 py-2 text-[10px] border-b border-border bg-card/40 sticky left-0 z-10 w-fit">
@@ -1142,11 +1147,11 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                   <th
                     key={formatDate(day)}
                     className={`text-center py-2 border-b border-l border-border 
-                      ${viewMode === "month" ? "min-w-[40px] px-0.5" : "min-w-[140px] px-2"} 
+                      ${viewMode === "month" || viewMode === "fortnight" ? "min-w-[40px] px-0.5" : "min-w-[140px] px-2"} 
                       ${isToday ? "bg-primary/20" : isWeekend ? "bg-slate-400/20" : "bg-card/40"}`}
                   >
                     <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
-                      <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" ? "text-[8px]" : "text-[10px]"}`}>
+                      <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" || viewMode === "fortnight" ? "text-[8px]" : "text-[10px]"}`}>
                         {weekday}
                       </div>
                       <div className={`font-bold font-heading ${isToday ? "text-primary" : "text-foreground"} ${viewMode === "month" ? "text-[10px]" : "text-[13px]"}`}>

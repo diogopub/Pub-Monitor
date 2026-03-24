@@ -2,8 +2,9 @@
  * ProjectCard — Card individual de projeto
  * Feed, prazo, equipe, documentos com toggle
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { useSchedule } from "@/contexts/ScheduleContext";
 import {
   useProjectCards,
   type ProjectCardData,
@@ -80,11 +81,20 @@ const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; next:
 };
 
 // ─── Team Role Badge ─────────────────────────────────────────────
-const ROLE_STYLES: Record<string, { bg: string; label: string }> = {
-  criacao: { bg: "#dc2626", label: "CRIAÇÃO" },
-  arq: { bg: "#16a34a", label: "ARQ" },
-  "3d": { bg: "#2563eb", label: "3D" },
+const ROLE_STYLES: Record<string, { bg: string; label: string; networkRole: string }> = {
+  criacao: { bg: "#dc2626", label: "CRIAÇÃO", networkRole: "creative" },
+  arq: { bg: "#16a34a", label: "ARQ", networkRole: "architect" },
+  "3d": { bg: "#2563eb", label: "3D", networkRole: "3d" },
 };
+
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
 function TeamRow({
   member,
@@ -95,36 +105,82 @@ function TeamRow({
 }) {
   const { state } = useNetwork();
   const { updateTeamMember, removeTeamMember } = useProjectCards();
+  const { getWeekRoster } = useSchedule();
   const style = ROLE_STYLES[member.role];
 
-  const membersForRole = state.members;
+  // Identificar se o nome atual é "Personalizado" (não está na lista oficial de members)
+  const isActuallyInList = state.members.some(m => m.name === member.name);
+  const [isCustom, setIsCustom] = useState(member.name !== "" && !isActuallyInList);
+
+  const membersForRole = useMemo(() => {
+    const monday = getMonday(new Date());
+    const weekKey = monday.toISOString().split("T")[0];
+    const allIds = state.members.map(m => m.id);
+    const rosterIds = getWeekRoster(weekKey, allIds);
+    
+    return state.members
+      .filter(m => rosterIds.includes(m.id))
+      .filter(m => (m as any).role === style.networkRole);
+  }, [state.members, getWeekRoster, style.networkRole]);
 
   return (
     <div className="flex items-center gap-2 group/team">
       <span
-        className="text-[10px] font-bold px-2 py-1 rounded min-w-[60px] text-center text-white"
+        className="text-[10px] font-bold px-2 py-1 rounded min-w-[60px] text-center text-white shrink-0"
         style={{ backgroundColor: style.bg }}
       >
         {style.label}
       </span>
-      <Select
-        value={member.name || "__empty__"}
-        onValueChange={(v) => updateTeamMember(cardId, member.id, v === "__empty__" ? "" : v)}
-      >
-        <SelectTrigger className="h-7 text-xs flex-1 bg-secondary/30 border-border">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__empty__">
-            <span className="italic opacity-60">Vazio</span>
-          </SelectItem>
-          {membersForRole.map((m) => (
-            <SelectItem key={m.id} value={m.name}>
-              {m.name}
+
+      {isCustom ? (
+        <div className="relative flex-1">
+          <Input
+            value={member.name}
+            onChange={(e) => updateTeamMember(cardId, member.id, e.target.value)}
+            className="h-7 text-[10px] md:text-[10px] font-bold font-heading uppercase tracking-wider bg-secondary/30 border-border px-2"
+            autoFocus
+          />
+          <button 
+            onClick={() => {
+              setIsCustom(false);
+              updateTeamMember(cardId, member.id, "");
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      ) : (
+        <Select
+          value={member.name || "__empty__"}
+          onValueChange={(v) => {
+            if (v === "__custom__") {
+              setIsCustom(true);
+              updateTeamMember(cardId, member.id, "");
+            } else {
+              updateTeamMember(cardId, member.id, v === "__empty__" ? "" : v);
+            }
+          }}
+        >
+          <SelectTrigger className="h-7 text-[10px] md:text-[10px] font-bold font-heading uppercase tracking-wider flex-1 bg-secondary/30 border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__empty__">
+              <span className="italic opacity-60">Personalizado</span>
             </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+            <SelectItem value="__custom__">
+              <span className="font-bold text-primary">✏️ Escrever nome...</span>
+            </SelectItem>
+            {membersForRole.map((m) => (
+              <SelectItem key={m.id} value={m.name}>
+                {m.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       <button
         onClick={() => removeTeamMember(cardId, member.id)}
         className="opacity-0 group-hover/team:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
@@ -138,10 +194,21 @@ function TeamRow({
 function AddTeamMemberForm({ cardId }: { cardId: string }) {
   const { state } = useNetwork();
   const { addTeamMember } = useProjectCards();
+  const { getWeekRoster } = useSchedule();
   const [role, setRole] = useState<"criacao" | "arq" | "3d">("criacao");
   const [name, setName] = useState("");
 
-  const membersForRole = state.members;
+  const membersForRole = useMemo(() => {
+    const monday = getMonday(new Date());
+    const weekKey = monday.toISOString().split("T")[0];
+    const allIds = state.members.map(m => m.id);
+    const rosterIds = getWeekRoster(weekKey, allIds);
+    const style = ROLE_STYLES[role];
+    
+    return state.members
+      .filter(m => rosterIds.includes(m.id))
+      .filter(m => (m as any).role === style.networkRole);
+  }, [state.members, getWeekRoster, role]);
 
   const handleAdd = () => {
     addTeamMember(cardId, role, name === "__empty__" ? "" : name);
@@ -162,11 +229,11 @@ function AddTeamMemberForm({ cardId }: { cardId: string }) {
       </Select>
       <Select value={name || "__empty__"} onValueChange={setName}>
         <SelectTrigger className="h-7 text-xs">
-          <SelectValue />
+          <SelectValue placeholder="Escolher..." />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__empty__">
-            <span className="italic opacity-60">Vazio</span>
+            <span className="italic opacity-60">Personalizado</span>
           </SelectItem>
           {membersForRole.map((m) => (
             <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>

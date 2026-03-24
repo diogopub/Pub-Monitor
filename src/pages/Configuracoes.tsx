@@ -454,7 +454,7 @@ function BackupSettingsSection() {
 
 export default function Configuracoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [isMonthView, setIsMonthView] = useState(false);
+  const [viewMode, setViewMode] = useState<"week" | "fortnight" | "month">("week");
   const { currentUserRole, loading } = usePermissions();
   const [, setLocation] = useLocation();
 
@@ -479,12 +479,35 @@ export default function Configuracoes() {
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-5 h-5 text-primary" />
                 <h2 className="text-lg font-bold font-heading tracking-wide">
-                  Agenda Semanal
+                  Agenda
                 </h2>
               </div>
-              <Switch checked={isMonthView} onCheckedChange={setIsMonthView} />
+              <div className="flex items-center gap-6 ml-4">
+                {(['week', 'fortnight', 'month'] as const).map((mode) => {
+                  const labels = { week: 'Semana', fortnight: 'Quinzena', month: 'Mês' };
+                  const active = viewMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      className="flex flex-col items-center gap-1 group transition-all"
+                    >
+                      <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                        active 
+                          ? 'bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.6)] scale-110' 
+                          : 'bg-white group-hover:bg-white/80'
+                      }`} />
+                      <span className={`text-[11px] font-medium transition-colors ${
+                        active ? 'text-white' : 'text-white/40 group-hover:text-white/60'
+                      }`}>
+                        {labels[mode]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <WeeklySchedule viewMode={isMonthView ? "month" : "week"} />
+            <WeeklySchedule viewMode={viewMode} />
           </section>
           <ProjectTimelines />
           <ProjectCardsSection onOpenDialog={() => setDialogOpen(true)} />
