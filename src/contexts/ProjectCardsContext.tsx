@@ -66,14 +66,7 @@ export interface FeedEntry {
   timestamp: string;
 }
 
-export const DEFAULT_DOCUMENTS: Omit<ProjectDocument, "id">[] = [
-  { label: "ESTUDO IA", enabled: false },
-  { label: "PRÉVIA PLANTA", enabled: false },
-  { label: "PRÉVIA 3D", enabled: false },
-  { label: "FINAL PLANTA", enabled: false },
-  { label: "FINAL 3D", enabled: false },
-  { label: "DESCRITIVO", enabled: false },
-];
+export const DEFAULT_DOCUMENTS: Omit<ProjectDocument, "id">[] = [];
 
 export interface ProjectCardsState {
   cards: ProjectCardData[];

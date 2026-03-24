@@ -135,6 +135,17 @@ export default function DailyAllocationPanel({
   const TIMELINE_Y = 100;
   const SIDE_PADDING = 60; // Left padding for the [+] button area
 
+  const firstVisibleDate = useMemo(() => formatISO(daysArray[0]), [daysArray]);
+  const lastVisibleDate = useMemo(() => formatISO(daysArray[daysArray.length - 1]), [daysArray]);
+
+  const hasPinsBefore = useMemo(() => {
+    return (timelinePins || []).some(pin => pin.date < firstVisibleDate);
+  }, [timelinePins, firstVisibleDate]);
+
+  const hasPinsAfter = useMemo(() => {
+    return (timelinePins || []).some(pin => pin.date > lastVisibleDate);
+  }, [timelinePins, lastVisibleDate]);
+
   return (
     <div className="bg-[#11131a]/95 backdrop-blur-md border-none rounded-none overflow-hidden w-full h-full flex flex-col">
       {/* Header */}
@@ -244,6 +255,24 @@ export default function DailyAllocationPanel({
             className="absolute right-0 h-[2px] bg-white/80 pointer-events-none"
             style={{ top: `${TIMELINE_Y}px`, left: `${SIDE_PADDING}px` }}
           />
+
+          {/* Discreet arrows for pins out of view */}
+          {hasPinsBefore && (
+            <div 
+              className="absolute z-10 pointer-events-none animate-pulse flex items-center"
+              style={{ left: `${SIDE_PADDING - 20}px`, top: `${TIMELINE_Y - 10}px` }}
+            >
+              <ChevronsLeft className="w-5 h-5 text-white/40" />
+            </div>
+          )}
+          {hasPinsAfter && (
+            <div 
+              className="absolute z-10 pointer-events-none animate-pulse flex items-center"
+              style={{ right: `4px`, top: `${TIMELINE_Y - 10}px` }}
+            >
+              <ChevronsRight className="w-5 h-5 text-white/40" />
+            </div>
+          )}
 
           {/* Add pin button (left side) */}
           <div
@@ -425,7 +454,7 @@ function TimelinePinElement({
                 <div className="relative flex items-center w-full">
                   <Input
                     autoFocus
-                    className="h-6 w-full text-[10px] px-1 py-0 text-center bg-[#11131a]/90 border-white/10 rounded shadow-md text-muted-foreground font-bold font-heading uppercase tracking-wider focus-visible:ring-1 focus-visible:ring-primary/50 focus:text-foreground transition-all"
+                    className="h-6 w-full text-[9.5px] md:text-[9.5px] px-1 py-0 text-center bg-[#11131a]/90 border-white/10 rounded shadow-md text-muted-foreground font-bold font-heading uppercase tracking-wider focus-visible:ring-1 focus-visible:ring-primary/50 focus:text-foreground transition-all leading-tight"
                     value={lab === "OUTROS" ? "" : lab}
                     onChange={(e) => handleUpdateLabel(index, e.target.value)}
                     onBlur={() => { if (!lab || lab === "OUTROS") handleUpdateLabel(index, "ENTRADA"); }}
@@ -442,12 +471,12 @@ function TimelinePinElement({
               ) : (
                 <div className="relative w-full group/labelitem">
                   <Select value={selectValue} onValueChange={(val) => handleUpdateLabel(index, val)}>
-                    <SelectTrigger className="[&>svg]:hidden w-full h-auto min-h-[24px] py-1 px-1 text-[10px] bg-[#11131a]/90 shadow-md border border-white/10 rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading hover:text-white text-muted-foreground flex justify-center uppercase tracking-wider transition-all">
+                    <SelectTrigger className="[&>svg]:hidden w-full h-auto min-h-[24px] py-1 px-1 text-[9.5px] bg-[#11131a]/90 shadow-md border border-white/10 rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading hover:text-white text-muted-foreground flex justify-center uppercase tracking-wider transition-all">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="max-h-[300px] z-[99999]">
                       {PIN_LABELS.map((opt) => (
-                        <SelectItem key={opt} value={opt} className="text-[10px] font-semibold">
+                        <SelectItem key={opt} value={opt} className="text-[9.5px] font-semibold">
                           {opt}
                         </SelectItem>
                       ))}

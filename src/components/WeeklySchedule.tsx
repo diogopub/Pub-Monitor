@@ -40,6 +40,7 @@ import {
   Calendar as CalendarIcon,
   ChevronUp,
   ChevronDown,
+  UserX,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -95,7 +96,7 @@ function ActivityPicker({
 }) {
   const items = activities || ACTIVITY_TYPES;
   return (
-    <div className="w-56">
+    <div className="flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-xs font-semibold font-heading text-muted-foreground uppercase tracking-wider">
           Atividade
@@ -148,7 +149,7 @@ function ProjectPicker({
 
   if (customMode) {
     return (
-      <div className="w-56">
+      <div className="flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border">
           <button
             onClick={() => setCustomMode(false)}
@@ -199,7 +200,7 @@ function ProjectPicker({
   }
 
   return (
-    <div className="w-56">
+    <div className="flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <button
           onClick={onBack}
@@ -225,7 +226,7 @@ function ProjectPicker({
           />
         </div>
       </div>
-      <ScrollArea className="max-h-[260px]">
+      <ScrollArea className="max-h-[300px] overflow-y-auto">
         <div className="p-1.5 space-y-0.5">
           {/* Personalizado */}
           <button
@@ -677,7 +678,7 @@ function ScheduleCell({
       <PopoverContent
         side="right"
         align="start"
-        className="p-0 w-auto"
+        className="p-0 w-64 bg-popover text-popover-foreground rounded-lg shadow-xl border border-border overflow-hidden"
         sideOffset={4}
       >
         {step === "activity" ? (
@@ -935,6 +936,7 @@ function AddMemberToWeekPopover({
   allMembers: { id: string; name: string; color: string }[];
 }) {
   const { setWeekRoster } = useSchedule();
+  const { removeMember } = useNetwork();
   const [open, setOpen] = useState(false);
 
   const missing = allMembers.filter((m) => !currentRoster.includes(m.id));
@@ -958,14 +960,27 @@ function AddMemberToWeekPopover({
           Adicionar nesta semana
         </p>
         {missing.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => handleAdd(m.id)}
-            className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent/50 text-xs"
-          >
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
-            {m.name}
-          </button>
+          <div key={m.id} className="flex items-center group/member">
+            <button
+              onClick={() => handleAdd(m.id)}
+              className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded hover:bg-accent/50 text-xs transition-colors"
+            >
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: m.color }} />
+              <span className="truncate">{m.name}</span>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Excluir permanentemente ${m.name}? Ele será removido de todos os projetos e da lista geral.`)) {
+                  removeMember(m.id);
+                }
+              }}
+              className="px-2 py-1.5 text-muted-foreground hover:text-destructive opacity-0 group-hover/member:opacity-100 transition-all"
+              title="Excluir membro permanentemente"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
         ))}
       </PopoverContent>
     </Popover>
