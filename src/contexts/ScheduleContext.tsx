@@ -41,9 +41,8 @@ export const ACTIVITY_TYPES: ActivityType[] = [
 ];
 
 export const ENTRADAS_ACTIVITIES: ActivityType[] = [
-  { id: "apresentacao-cliente", label: "APRESENTAÇÃO CLIENTE", color: "#7c3aed", textColor: "#fff" },
+  { id: "apresentacao-cliente", label: "APRESENTAÇÃO CLIENTE", color: "#f9a825", textColor: "#000" },
   { id: "entrega-pub", label: "ENTREGA PUB", color: "#737373", textColor: "#fff" },
-  { id: "feedback-interno", label: "FEEDBACK INTERNO", color: "#db2777", textColor: "#fff" },
   { id: "reuniao-cliente", label: "REUNIÃO CLIENTE", color: "#a855f7", textColor: "#fff" },
   { id: "briefing", label: "BRIEFING", color: "#1a237e", textColor: "#fff" },
 ];
