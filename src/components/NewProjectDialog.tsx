@@ -98,11 +98,9 @@ export default function NewProjectDialog({
     const weekKey = monday.toISOString().split("T")[0];
     const allIds = networkState.members.map(m => m.id);
     const rosterIds = getWeekRoster(weekKey, allIds);
-    const networkRole = ROLE_STYLES[role]?.networkRole;
 
     return networkState.members
-      .filter(m => rosterIds.includes(m.id))
-      .filter(m => (m as any).role === networkRole);
+      .filter(m => rosterIds.includes(m.id));
   };
 
   return (

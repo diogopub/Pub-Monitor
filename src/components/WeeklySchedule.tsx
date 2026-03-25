@@ -1035,7 +1035,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       return Array.from({ length: daysCount }, (_, i) => addDays(currentMonday, i));
     }
     if (viewMode === "fortnight") {
-      return Array.from({ length: 15 }, (_, i) => addDays(currentMonday, i));
+      return Array.from({ length: 12 }, (_, i) => addDays(currentMonday, i));
     }
     return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
   }, [currentMonday, viewMode]);
@@ -1147,14 +1147,14 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                   <th
                     key={formatDate(day)}
                     className={`text-center py-2 border-b border-l border-border 
-                      ${viewMode === "month" || viewMode === "fortnight" ? "min-w-[40px] px-0.5" : "min-w-[140px] px-2"} 
+                      ${viewMode === "month" ? "min-w-[40px] px-0.5" : viewMode === "fortnight" ? "min-w-[70px] px-1" : "min-w-[140px] px-2"} 
                       ${isToday ? "bg-primary/20" : isWeekend ? "bg-slate-400/20" : "bg-card/40"}`}
                   >
                     <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
-                      <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" || viewMode === "fortnight" ? "text-[8px]" : "text-[10px]"}`}>
+                      <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" ? "text-[8px]" : viewMode === "fortnight" ? "text-[9px]" : "text-[10px]"}`}>
                         {weekday}
                       </div>
-                      <div className={`font-bold font-heading ${isToday ? "text-primary" : "text-foreground"} ${viewMode === "month" ? "text-[10px]" : "text-[13px]"}`}>
+                      <div className={`font-bold font-heading ${isToday ? "text-primary" : "text-foreground"} ${viewMode === "month" ? "text-[10px]" : viewMode === "fortnight" ? "text-[11px]" : "text-[13px]"}`}>
                         {dayNum}
                       </div>
                     </div>

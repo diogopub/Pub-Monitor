@@ -119,9 +119,8 @@ function TeamRow({
     const rosterIds = getWeekRoster(weekKey, allIds);
     
     return state.members
-      .filter(m => rosterIds.includes(m.id))
-      .filter(m => (m as any).role === style.networkRole);
-  }, [state.members, getWeekRoster, style.networkRole]);
+      .filter(m => rosterIds.includes(m.id));
+  }, [state.members, getWeekRoster]);
 
   return (
     <div className="flex items-center gap-2 group/team">
@@ -203,12 +202,10 @@ function AddTeamMemberForm({ cardId }: { cardId: string }) {
     const weekKey = monday.toISOString().split("T")[0];
     const allIds = state.members.map(m => m.id);
     const rosterIds = getWeekRoster(weekKey, allIds);
-    const style = ROLE_STYLES[role];
     
     return state.members
-      .filter(m => rosterIds.includes(m.id))
-      .filter(m => (m as any).role === style.networkRole);
-  }, [state.members, getWeekRoster, role]);
+      .filter(m => rosterIds.includes(m.id));
+  }, [state.members, getWeekRoster]);
 
   const handleAdd = () => {
     addTeamMember(cardId, role, name === "__empty__" ? "" : name);
