@@ -11,6 +11,7 @@ import { pushEventToGoogleCalendar, deleteEventsFromGoogleCalendar } from "@/lib
 import {
   useSchedule,
   ACTIVITY_TYPES,
+  ENTRADAS_ACTIVITIES,
   type ActivityType,
   type ScheduleEntry,
 } from "@/contexts/ScheduleContext";
@@ -105,7 +106,7 @@ function ActivityPicker({
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
-      <ScrollArea className="max-h-[320px]">
+      <ScrollArea className="max-h-[420px]">
         <div className="p-1.5 space-y-0.5">
           {items.map((act) => (
             <button
@@ -265,13 +266,6 @@ function ProjectPicker({
     </div>
   );
 }
-
-// ─── Special activities for Entradas e Entregas row ──────────────
-const ENTRADAS_ACTIVITIES: ActivityType[] = [
-  { id: "briefing", label: "BRIEFING", color: "#1a237e", textColor: "#fff" },
-  { id: "entrega-pub", label: "ENTREGA PUB", color: "#737373", textColor: "#fff" },
-  { id: "apresentacao-cliente", label: "APRESENTAÇÃO CLIENTE", color: "#f9a825", textColor: "#000" },
-];
 
 function TaskBar({
   entry,

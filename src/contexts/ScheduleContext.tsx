@@ -44,6 +44,7 @@ export const ENTRADAS_ACTIVITIES: ActivityType[] = [
   { id: "entrega-pub", label: "Entrega PUB", color: "#737373", textColor: "#fff" },
   { id: "feedback-interno", label: "Feedback Interno", color: "#db2777", textColor: "#fff" },
   { id: "reuniao-cliente", label: "Reunião Cliente", color: "#a855f7", textColor: "#fff" },
+  { id: "briefing", label: "Briefing", color: "#1a237e", textColor: "#fff" },
 ];
 
 // ─── Schedule Entry ───────────────────────────────────────────────
