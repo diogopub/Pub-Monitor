@@ -45,7 +45,20 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { isHolidayBR } from "@/lib/utils";
+import { isHolidayBR, entryToSlots, calcRightResize, calcLeftResize, SCHEDULE_SLOTS } from "@/lib/utils";
+
+// ─── GCal conversion helpers ─────────────────────────────────────
+// When an entry uses the new slot system, convert back to fractions for GCal.
+function toGCalDuration(entry: ScheduleEntry, overrideDuration?: number, overrideStartSlot?: number): number {
+  const slots = overrideDuration ?? entry.duration ?? 1;
+  const isNewSystem = (overrideStartSlot !== undefined) || (entry.startSlot !== undefined);
+  return isNewSystem ? slots / SCHEDULE_SLOTS : slots;
+}
+function toGCalStartOffset(entry: ScheduleEntry, overrideStartSlot?: number): number {
+  const slot = overrideStartSlot ?? entry.startSlot;
+  if (slot !== undefined) return slot / SCHEDULE_SLOTS;
+  return entry.startOffset ?? 0;
+}
 
 // ─── Date helpers ────────────────────────────────────────────────
 function getMonday(d: Date): Date {
@@ -271,6 +284,10 @@ function ProjectPicker({
   );
 }
 
+// ─── TaskBar — 8-slot grid (10:00–18:00) ─────────────────────────
+// State model: startSlot ∈ [0,7], durationSlots ∈ [1, 8-startSlot]
+// Visual: left = (startSlot/8)*100%, width = (durationSlots/8)*100%
+// All resize math is pure: never derived from pixels after drag ends.
 function TaskBar({
   entry,
   act,
@@ -284,114 +301,177 @@ function TaskBar({
   removeEntry: (id: string) => void;
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => Promise<void> | void;
 }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  // Live preview during resize: { startSlot, durationSlots } | null
+  const [preview, setPreview] = useState<{ startSlot: number; durationSlots: number } | null>(null);
+  const isResizingRef = useRef(false);
   const barRef = useRef<HTMLDivElement>(null);
 
-  const startDrag = (e: React.MouseEvent) => {
+  // ── Helpers ────────────────────────────────────────────────────
+  const getCellRect = () => barRef.current?.closest("td")?.getBoundingClientRect() ?? null;
+
+  // ── RIGHT handle drag ──────────────────────────────────────────
+  // Spec §3: newDuration = round((mouseX_relative_to_cell) / slotWidth) - startSlot
+  //          clamp to [1, 8 - startSlot]; startSlot NEVER changes.
+  const startRightResize = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    setIsDragging(true);
+    isResizingRef.current = true;
 
-    const startX = e.clientX;
-    const startDuration = entry.duration || 1;
-    const parent = barRef.current?.closest('td');
-    const colWidth = parent ? parent.getBoundingClientRect().width : 140;
+    const cellRect = getCellRect();
+    if (!cellRect) return;
 
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      let newDuration = startDuration + (deltaX / colWidth);
-      newDuration = Math.round(newDuration * 2) / 2; // snap to 0.5
-      newDuration = Math.max(0.5, newDuration);
-      setDragWidth(newDuration);
+    const { startSlot, durationSlots: origDur } = entryToSlots(entry);
+    const slotWidth = cellRect.width / SCHEDULE_SLOTS;
+
+    const apply = (clientX: number) => {
+      const mouseX = clientX - cellRect.left;
+      return calcRightResize({ mousePxRelativeToCell: mouseX, startSlot, slotWidth });
     };
 
-    const onMouseUp = (upEvent: MouseEvent) => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      setIsDragging(false);
-
-      const deltaX = upEvent.clientX - startX;
-      let newDuration = startDuration + (deltaX / colWidth);
-      newDuration = Math.round(newDuration * 2) / 2;
-      newDuration = Math.max(0.5, newDuration);
-
-      updateEntry(entry.id, { duration: newDuration });
-      setDragWidth(null);
-      setDragWidth(null);
+    const onMove = (mv: MouseEvent) => {
+      const { duration } = apply(mv.clientX);
+      setPreview({ startSlot, durationSlots: duration });
     };
 
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    const onUp = (up: MouseEvent) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      isResizingRef.current = false;
+      const { duration } = apply(up.clientX);
+      if (duration !== origDur) {
+        updateEntry(entry.id, {
+          startSlot,
+          duration,
+          startOffset: startSlot / SCHEDULE_SLOTS,
+        });
+      }
+      setPreview(null);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
   };
 
-  const handleDragStart = (e: React.DragEvent) => {
+  // ── LEFT handle drag ───────────────────────────────────────────
+  // Spec §4: newStartSlot = round(mouseX / slotWidth)
+  //          clamp to [0, originalEndSlot - 1]
+  //          newDuration = originalEndSlot - newStartSlot
+  const startLeftResize = (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
+    isResizingRef.current = true;
+
+    const cellRect = getCellRect();
+    if (!cellRect) return;
+
+    const { startSlot: origStart, durationSlots: origDur } = entryToSlots(entry);
+    const originalEndSlot = origStart + origDur;
+    const slotWidth = cellRect.width / SCHEDULE_SLOTS;
+
+    const apply = (clientX: number) => {
+      const mouseX = clientX - cellRect.left;
+      return calcLeftResize({ mousePxRelativeToCell: mouseX, originalEndSlot, slotWidth });
+    };
+
+    const onMove = (mv: MouseEvent) => {
+      const { startSlot, duration } = apply(mv.clientX);
+      setPreview({ startSlot, durationSlots: duration });
+    };
+
+    const onUp = (up: MouseEvent) => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      isResizingRef.current = false;
+      const { startSlot, duration } = apply(up.clientX);
+      if (startSlot !== origStart || duration !== origDur) {
+        updateEntry(entry.id, {
+          startSlot,
+          duration,
+          startOffset: startSlot / SCHEDULE_SLOTS,
+        });
+      }
+      setPreview(null);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  // ── HTML5 drag-to-move (blocked during resize) ─────────────────
+  const handleDragStart = (e: React.DragEvent) => {
+    if (isResizingRef.current) { e.preventDefault(); return; }
+    e.stopPropagation();
+    const { startSlot } = entryToSlots(entry);
     e.dataTransfer.setData("application/json", JSON.stringify({
       entryId: entry.id,
       sourceMemberId: entry.memberId,
       sourceDate: entry.date,
       sourceSlot: entry.slotIndex || 0,
-      sourceOffset: entry.startOffset || 0
+      sourceOffset: startSlot / SCHEDULE_SLOTS,
     }));
     e.dataTransfer.effectAllowed = "all";
-
-    // Create a drag image
-    const dragIcon = document.createElement('div');
-    dragIcon.style.width = '100px';
-    dragIcon.style.height = '20px';
-    dragIcon.style.backgroundColor = act.color;
-    dragIcon.style.borderRadius = '4px';
-    dragIcon.style.position = 'absolute';
-    dragIcon.style.top = '-1000px';
+    const dragIcon = document.createElement("div");
+    dragIcon.style.cssText = `width:100px;height:20px;background:${act.color};border-radius:4px;position:absolute;top:-1000px`;
     document.body.appendChild(dragIcon);
     e.dataTransfer.setDragImage(dragIcon, 50, 10);
     setTimeout(() => document.body.removeChild(dragIcon), 0);
   };
 
-  const duration = dragWidth !== null ? dragWidth : (entry.duration || 1);
-  const slotIndex = entry.slotIndex || 0;
-  const startOffset = entry.startOffset || 0;
-  const paddingCompensation = Math.max(0, Math.ceil(duration - 1)) * 1;
+  // ── Derive visual geometry from slot state (§10) ───────────────
+  // ALWAYS use slot math — never raw pixels for the final render.
+  const slots = entryToSlots(entry);
+  const displayStart = preview?.startSlot ?? slots.startSlot;
+  const displayDur   = preview?.durationSlots ?? slots.durationSlots;
+  const isResizing   = preview !== null;
+
+  const leftPct  = (displayStart / SCHEDULE_SLOTS) * 100;
+  const widthPct = (displayDur  / SCHEDULE_SLOTS) * 100;
+  const rowTop   = (entry.slotIndex || 0) * 22 + 2;
+  const barHeight = act.id === "entrega-pub" ? 18 : 20;
 
   return (
     <div
       ref={barRef}
-      draggable
+      draggable={!isResizingRef.current}
       onDragStart={handleDragStart}
-      className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm ${isDragging ? "z-50 ring-2 ring-primary" : "z-10"} 
-        ${act.id === "entrega-pub" ? "border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)]" : ""} 
-        cursor-grab active:cursor-grabbing hover:-translate-y-[1px] transition-transform`}
+      className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm select-none
+        ${isResizing ? "z-50 ring-2 ring-primary/70 opacity-90" : "z-10"}
+        ${act.id === "entrega-pub" ? "border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)]" : ""}
+        ${!isResizing ? "hover:-translate-y-[1px] transition-transform cursor-grab active:cursor-grabbing" : "cursor-col-resize"}`}
       style={{
         backgroundColor: act.color,
         color: act.textColor,
-        top: `${slotIndex * 22 + 2}px`,
-        left: startOffset === 0 ? '2px' : `calc(${startOffset * 100}% + 2px)`,
-        width: `calc(${duration * 100}% - 4px + ${paddingCompensation}px)`,
-        height: act.id === "entrega-pub" ? '18px' : '20px', // slightly smaller to account for border without growing row
+        top: `${rowTop}px`,
+        left: `${leftPct}%`,
+        width: `${widthPct}%`,
+        height: `${barHeight}px`,
       }}
-      onClick={(e) => {
-        e.stopPropagation();
-      }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex-1 truncate text-center px-1.5 pointer-events-none select-none relative">
+      {/* ── LEFT resize handle ─── */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-2.5 flex items-center justify-center cursor-ew-resize hover:bg-black/20 rounded-l border-r border-white/20 z-20 opacity-0 group-hover/bar:opacity-100 transition-opacity"
+        onMouseDown={startLeftResize}
+      >
+        <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
+      </div>
+
+      {/* ── Label ─── */}
+      <div className="flex-1 truncate text-center px-3 pointer-events-none select-none">
         {entry.customLabel || (proj ? proj.name : act.label)}
       </div>
 
-      <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity">
+      {/* ── RIGHT controls (delete + resize) ─── */}
+      <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity z-20">
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            removeEntry(entry.id);
-          }}
-          className="hover:bg-black/20 text-white rounded p-0.5 mr-1"
+          onClick={(e) => { e.stopPropagation(); removeEntry(entry.id); }}
+          className="hover:bg-black/20 text-white rounded p-0.5 mr-0.5"
         >
           <X className="w-2.5 h-2.5" />
         </button>
-
         <div
-          className="w-2.5 h-full cursor-col-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
-          onMouseDown={startDrag}
+          className="w-2.5 h-full cursor-ew-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
+          onMouseDown={startRightResize}
         >
           <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
         </div>
@@ -587,11 +667,12 @@ function ScheduleCell({
     }
 
     const durationChanged = updates.duration !== undefined && updates.duration !== entry.duration;
+    const startSlotChanged = updates.startSlot !== undefined && updates.startSlot !== entry.startSlot;
     const positionChanged = (updates.date !== undefined && updates.date !== entry.date) ||
       (updates.slotIndex !== undefined && updates.slotIndex !== entry.slotIndex) ||
       (updates.memberId !== undefined && updates.memberId !== entry.memberId);
 
-    if (durationChanged || positionChanged) {
+    if (durationChanged || startSlotChanged || positionChanged) {
       // Deletar eventos Google antigos
       if (entry.googleEventIds?.length) {
         const t = await ensureGoogleToken();
@@ -599,12 +680,15 @@ function ScheduleCell({
       }
       // Atualizar localmente zerando os IDs
       updateEntry(entryId, { ...updates, googleEventIds: [] });
-      // Criar novos eventos com os dados atualizados
-      const newDate = updates.date ?? entry.date;
-      const newDuration = updates.duration ?? entry.duration ?? 0.5;
-      const newStartOffset = updates.startOffset ?? entry.startOffset ?? 0;
+      
+      // Criar novos eventos com os dados atualizados convertidos para o GCal
+      const newDuration = updates.duration ?? entry.duration;
+      const newStartSlot = updates.startSlot ?? entry.startSlot;
+      const gCalDuration = toGCalDuration(entry, newDuration, newStartSlot);
+      const gCalStartOffset = toGCalStartOffset(entry, newStartSlot);
+      
       const newMemberId = updates.memberId ?? entry.memberId;
-      const googleIds = await pushToCalendar(newDate, newDuration, newStartOffset, newMemberId, entry.projectId, entry.customLabel);
+      const googleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, entry.projectId, entry.customLabel);
       if (googleIds.length > 0) {
         updateEntry(entryId, { googleEventIds: googleIds });
       }
