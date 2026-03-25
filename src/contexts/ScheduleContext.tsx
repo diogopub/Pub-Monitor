@@ -35,16 +35,17 @@ export const ACTIVITY_TYPES: ActivityType[] = [
   { id: "3d", label: "3D", color: "#60a5fa", textColor: "#fff" },
   { id: "pos", label: "PÓS", color: "#d9f99d", textColor: "#000" },
   { id: "video", label: "VÍDEO", color: "#e879f9", textColor: "#fff" },
+  { id: "reuniao-cliente", label: "REUNIÃO CLIENTE", color: "#a855f7", textColor: "#fff" },
   { id: "orcamento", label: "ORÇAMENTO", color: "#fb923c", textColor: "#fff" },
   { id: "dayoff", label: "DAYOFF", color: "#92400e", textColor: "#fff" },
 ];
 
 export const ENTRADAS_ACTIVITIES: ActivityType[] = [
-  { id: "apresentacao-cliente", label: "Apresentação Cliente", color: "#7c3aed", textColor: "#fff" },
-  { id: "entrega-pub", label: "Entrega PUB", color: "#737373", textColor: "#fff" },
-  { id: "feedback-interno", label: "Feedback Interno", color: "#db2777", textColor: "#fff" },
-  { id: "reuniao-cliente", label: "Reunião Cliente", color: "#a855f7", textColor: "#fff" },
-  { id: "briefing", label: "Briefing", color: "#1a237e", textColor: "#fff" },
+  { id: "apresentacao-cliente", label: "APRESENTAÇÃO CLIENTE", color: "#7c3aed", textColor: "#fff" },
+  { id: "entrega-pub", label: "ENTREGA PUB", color: "#737373", textColor: "#fff" },
+  { id: "feedback-interno", label: "FEEDBACK INTERNO", color: "#db2777", textColor: "#fff" },
+  { id: "reuniao-cliente", label: "REUNIÃO CLIENTE", color: "#a855f7", textColor: "#fff" },
+  { id: "briefing", label: "BRIEFING", color: "#1a237e", textColor: "#fff" },
 ];
 
 // ─── Schedule Entry ───────────────────────────────────────────────

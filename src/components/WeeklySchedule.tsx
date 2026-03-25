@@ -106,8 +106,8 @@ function ActivityPicker({
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
-      <ScrollArea className="max-h-[420px]">
-        <div className="p-1.5 space-y-0.5">
+      <ScrollArea className="max-h-[480px]">
+        <div className="p-2 space-y-1 min-h-[300px]">
           {items.map((act) => (
             <button
               key={act.id}
@@ -672,7 +672,7 @@ function ScheduleCell({
       <PopoverContent
         side="right"
         align="start"
-        className="p-0 w-64 bg-popover text-popover-foreground rounded-lg shadow-xl border border-border overflow-hidden"
+        className="p-0 w-64 bg-popover text-popover-foreground rounded-lg shadow-xl border border-border overflow-hidden max-h-[85vh] flex flex-col"
         sideOffset={4}
       >
         {step === "activity" ? (
