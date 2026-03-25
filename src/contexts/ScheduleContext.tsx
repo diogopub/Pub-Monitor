@@ -55,9 +55,10 @@ export interface ScheduleEntry {
   activityId: string;
   projectId?: string;
   customLabel?: string;
-  duration?: number;
-  slotIndex?: number;
-  startOffset?: number;
+  duration?: number;    // int slots [1–8] when startSlot is set; float fraction otherwise (legacy)
+  slotIndex?: number;   // row stacking index: 0, 1, 2
+  startOffset?: number; // kept for GCal / legacy; = startSlot / SCHEDULE_SLOTS when new system
+  startSlot?: number;   // integer 0–7; presence marks new 8-slot system
   googleEventIds?: string[];
 }
 

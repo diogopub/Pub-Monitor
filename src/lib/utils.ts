@@ -29,6 +29,75 @@ export function sanitizeForFirestore(obj: any): any {
   return sanitized;
 }
 
+// ─── 8-Slot Schedule Grid (10:00–18:00) ──────────────────────────
+
+export const SCHEDULE_SLOTS = 8;
+
+/**
+ * Converts a ScheduleEntry's legacy float-based fields or new startSlot field
+ * to canonical integer slot values.
+ *
+ * Legacy: startOffset ∈ {0, 0.5}, duration ∈ (0, 1]
+ * New:    startSlot ∈ [0,7], duration = integer slot count ≥ 1
+ */
+export function entryToSlots(entry: {
+  duration?: number;
+  startOffset?: number;
+  startSlot?: number;
+}): { startSlot: number; durationSlots: number } {
+  if (entry.startSlot !== undefined) {
+    // New system: duration is already in integer slots
+    return {
+      startSlot: entry.startSlot,
+      durationSlots: Math.max(1, Math.round(entry.duration ?? 1)),
+    };
+  }
+  // Legacy system: convert float fractions to integer slots
+  const startSlot = Math.round((entry.startOffset ?? 0) * SCHEDULE_SLOTS);
+  const durationSlots = Math.max(1, Math.round((entry.duration ?? 1) * SCHEDULE_SLOTS));
+  return { startSlot, durationSlots };
+}
+
+/**
+ * Calculates new duration when dragging the RIGHT resize handle.
+ * Mouse position is relative to the LEFT edge of the cell (not the bar).
+ *
+ * @param mousePxRelativeToCell  clientX minus cell.left
+ * @param startSlot              current startSlot (never changes in right resize)
+ * @param slotWidth              px width of one slot = cell.width / SCHEDULE_SLOTS
+ */
+export function calcRightResize(params: {
+  mousePxRelativeToCell: number;
+  startSlot: number;
+  slotWidth: number;
+}): { duration: number } {
+  const { mousePxRelativeToCell, startSlot, slotWidth } = params;
+  const rawEndSlot = mousePxRelativeToCell / slotWidth;
+  const newEndSlot = Math.round(rawEndSlot);
+  const duration = newEndSlot - startSlot;
+  return { duration: Math.max(1, Math.min(duration, SCHEDULE_SLOTS - startSlot)) };
+}
+
+/**
+ * Calculates new startSlot + duration when dragging the LEFT resize handle.
+ * Mouse position is relative to the LEFT edge of the cell.
+ *
+ * @param mousePxRelativeToCell  clientX minus cell.left
+ * @param originalEndSlot        startSlot + durationSlots at drag start (never changes)
+ * @param slotWidth              px width of one slot = cell.width / SCHEDULE_SLOTS
+ */
+export function calcLeftResize(params: {
+  mousePxRelativeToCell: number;
+  originalEndSlot: number;
+  slotWidth: number;
+}): { startSlot: number; duration: number } {
+  const { mousePxRelativeToCell, originalEndSlot, slotWidth } = params;
+  const rawSlot = mousePxRelativeToCell / slotWidth;
+  // Snap to nearest slot, clamp so start never reaches end
+  const newStartSlot = Math.max(0, Math.min(Math.round(rawSlot), originalEndSlot - 1));
+  return { startSlot: newStartSlot, duration: originalEndSlot - newStartSlot };
+}
+
 export function getEaster(year: number): Date {
   const f = Math.floor;
   const G = year % 19;
