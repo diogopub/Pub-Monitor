@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { isHolidayBR } from "@/lib/utils";
 
 // ─── Date helpers ────────────────────────────────────────────────
 function getMonday(d: Date): Date {
@@ -63,7 +64,10 @@ function addDays(d: Date, days: number): Date {
 }
 
 function formatDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function formatDayHeader(d: Date): { day: string; weekday: string } {
@@ -1137,12 +1141,14 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                 const { day: dayNum, weekday } = formatDayHeader(day);
                 const isToday = formatDate(day) === today;
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                const isHoliday = isHolidayBR(day);
+                const isOffDay = isWeekend || isHoliday;
                 return (
                   <th
                     key={formatDate(day)}
                     className={`text-center py-2 border-b border-l border-border 
                       ${viewMode === "month" ? "min-w-[40px] px-0.5" : viewMode === "fortnight" ? "min-w-[70px] px-1" : "min-w-[140px] px-2"} 
-                      ${isToday ? "bg-primary/20" : isWeekend ? "bg-slate-400/20" : "bg-card/40"}`}
+                      ${isToday ? "bg-primary/20" : isOffDay ? "bg-slate-400/20" : "bg-card/40"}`}
                   >
                     <div className="flex flex-col items-center select-none pointer-events-none -space-y-0.5">
                       <div className={`font-bold font-heading uppercase tracking-wider ${isToday ? "text-primary/80" : "text-muted-foreground/60"} ${viewMode === "month" ? "text-[8px]" : viewMode === "fortnight" ? "text-[9px]" : "text-[10px]"}`}>
@@ -1213,10 +1219,12 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                     const dateStr = formatDate(day);
                     const isToday = dateStr === today;
                     const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+                    const isHoliday = isHolidayBR(day);
+                    const isOffDay = isWeekend || isHoliday;
                     return (
                       <td
                         key={dateStr}
-                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : isWeekend ? "bg-slate-400/10" : ""
+                        className={`border-b border-l border-border align-top relative ${isToday ? "bg-primary/5" : isOffDay ? "bg-slate-400/10" : ""
                           }`}
                         style={{ zIndex: 10 - dayIdx }}
                       >

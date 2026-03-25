@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { isHolidayBR } from "@/lib/utils";
 
 const PIN_LABELS = [
   "ENTRADA",
@@ -219,12 +220,14 @@ export default function DailyAllocationPanel({
             {daysArray.map((d, i) => {
               const dayOfWeek = d.getDay();
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              const isHoliday = isHolidayBR(d);
+              const isOffDay = isWeekend || isHoliday;
               const isToday = formatISO(d) === formatISO(new Date());
 
               return (
                 <div
                   key={d.toISOString()}
-                  className={`flex-1 relative border-l border-white/5 transition-colors ${isWeekend ? "bg-white/[0.02]" : ""
+                  className={`flex-1 relative border-l border-white/5 transition-colors ${isOffDay ? "bg-white/[0.02]" : ""
                     } ${isToday ? "bg-primary/5" : ""}`}
                 >
                   {/* Day labels at top (Weekday + Number) */}

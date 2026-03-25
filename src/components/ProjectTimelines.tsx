@@ -6,6 +6,7 @@ import React, { useState, useMemo } from "react";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { isHolidayBR } from "@/lib/utils";
 
 // ─── Badge definitions ────────────────────────────────────────────
 export interface BadgeDef {
@@ -268,12 +269,14 @@ function TimelineRow({
           {daysArray.map((d) => {
             const dow = d.getDay();
             const isWknd = dow === 0 || dow === 6;
+            const isHoliday = isHolidayBR(d);
+            const isOffDay = isWknd || isHoliday;
             const isToday = formatISO(d) === todayStr;
             return (
               <div
                 key={d.toISOString()}
                 className={`flex-1 border-l border-white/5 relative
-                  ${isWknd ? "bg-white/[0.02]" : ""}
+                  ${isOffDay ? "bg-white/[0.02]" : ""}
                   ${isToday ? "bg-primary/5" : ""}`}
               >
                 {/* Day header */}
@@ -458,12 +461,14 @@ export default function ProjectTimelines() {
           {daysArray.map((d) => {
             const dow = d.getDay();
             const isWknd = dow === 0 || dow === 6;
+            const isHoliday = isHolidayBR(d);
+            const isOffDay = isWknd || isHoliday;
             const isToday = formatISO(d) === todayStr;
             return (
               <div
                 key={d.toISOString()}
                 className={`flex-1 text-center py-1.5 border-l border-white/5 text-[9px] font-mono select-none
-                  ${isWknd ? "bg-white/[0.02]" : ""}
+                  ${isOffDay ? "bg-white/[0.02]" : ""}
                   ${isToday ? "text-primary font-bold" : "text-white/30"}`}
               >
                 <div className="uppercase">{DAYS[dow]}</div>
