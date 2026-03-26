@@ -84,7 +84,7 @@ export interface ScheduleState {
 
 interface ScheduleContextType {
   state: ScheduleState;
-  addEntry: (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string) => void;
+  addEntry: (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string, startSlot?: number, googleEventIds?: string[]) => void;
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => void;
   removeEntry: (id: string) => void;
   removeEntriesByCell: (memberId: string, date: string) => void;
@@ -180,7 +180,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
 
   // Operations
   const addEntry = useCallback(
-    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string) => {
+    (memberId: string, date: string, activityId: string, projectId?: string, customLabel?: string, duration?: number, slotIndex?: number, startOffset?: number, id?: string, startSlot?: number, googleEventIds?: string[]) => {
       const newId = id || nanoid(8);
       
       setStateInternal(prev => {
@@ -210,6 +210,8 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
           duration: duration ?? 1,
           slotIndex: slotIndex ?? autoSlot,
           startOffset: startOffset ?? 0,
+          startSlot,
+          googleEventIds,
         };
 
         // Firestore write moved outside pure state updater via Promise

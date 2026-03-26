@@ -74,6 +74,9 @@ export async function pushEventToGoogleCalendar(
           const body = await res.json().catch(() => ({}));
           const msg = body.error?.message || res.statusText;
           console.error("Erro Google API (POST):", res.status, body);
+          if (res.status === 401 || res.status === 403) {
+            throw new Error(`AuthError: ${res.status}`);
+          }
           return { ids: eventIds, error: `${res.status}: ${msg}` };
         }
 
@@ -90,6 +93,7 @@ export async function pushEventToGoogleCalendar(
     }
     return { ids: eventIds };
   } catch (e: any) {
+    if (e.message && e.message.includes("AuthError")) throw e;
     console.error("Erro de rede GCal:", e);
     return { ids: eventIds, error: e.message };
   }

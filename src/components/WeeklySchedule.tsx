@@ -591,18 +591,42 @@ function ScheduleCell({
     if (!selectedActivity) return;
     if (isPastDate(date) && !window.confirm("Atenção: você está adicionando uma alocação em um dia que já passou. Deseja continuar?")) return;
 
-    const newId = nanoidLocal();
+    // 1. Validar Token Google ANTES
+    const t = await ensureGoogleToken();
+    if (!t) {
+      toast.error("Você precisa estar conectado ao Google para criar alocações.");
+      return;
+    }
+
     const durationSlots = 4; // default 4 slots
     const startSlot = 0;     // default morning
-    
-    // Deixa o slotIndex como undefined para o contexto calcular automaticamente o próximo livre
-    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, durationSlots, undefined, startSlot / SCHEDULE_SLOTS, newId);
-    updateEntry(newId, { startSlot, duration: durationSlots }); // marca do novo sistema
+    const gCalDuration = durationSlots / SCHEDULE_SLOTS;
+    const gCalStartOffset = startSlot / SCHEDULE_SLOTS;
 
-    // Push ao Google Calendar repassando como fração (padrão do pushToCalendar originado no googleCalendar.ts)
-    const googleIds = await pushToCalendar(date, durationSlots / SCHEDULE_SLOTS, startSlot / SCHEDULE_SLOTS, memberId, projectId, customLabel);
-    if (googleIds.length > 0) {
-      updateEntry(newId, { googleEventIds: googleIds });
+    try {
+      // 2. Criar no Google FIRST
+      const googleIds = await pushToCalendar(date, gCalDuration, gCalStartOffset, memberId, projectId, customLabel);
+      
+      // 3. Criar no Monitor (Firestore) apenas se GCal funcionou (pelo menos parcial)
+      const newId = nanoidLocal();
+      addEntry(
+        memberId, date, selectedActivity.id, projectId || undefined, customLabel, 
+        durationSlots, undefined, gCalStartOffset, newId, startSlot, 
+        googleIds.length > 0 ? googleIds : undefined
+      );
+
+      if (googleIds.length === 0) {
+        toast.warning("A alocação foi criada no monitor, mas houve um problema ao sincronizar com o Google Calendar.");
+      }
+    } catch (err: any) {
+      if (err.message && err.message.includes("AuthError")) {
+        clearGoogleToken();
+        toast.error("Sua sessão do Google expirou. Conecte-se novamente antes de salvar.");
+      } else {
+        console.error("GCal create error:", err);
+        toast.error("Falha ao criar evento no Google. Ação cancelada.");
+      }
+      return; // Aborta criação local
     }
 
     setOpen(false);
