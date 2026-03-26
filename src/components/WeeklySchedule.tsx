@@ -402,12 +402,21 @@ function TaskBar({
     if (isResizingRef.current) { e.preventDefault(); return; }
     e.stopPropagation();
     const { startSlot } = entryToSlots(entry);
+
+    // Identifica onde exatamente na barra o usuário clicou para manter o offset no drop
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const grabPx = e.clientX - rect.left;
+    const colWidth = rect.width / (entry.duration || 1) * SCHEDULE_SLOTS; // largura estimada da coluna
+    const slotWidth = colWidth / SCHEDULE_SLOTS;
+    const grabSlotOffset = grabPx / slotWidth;
+
     e.dataTransfer.setData("application/json", JSON.stringify({
       entryId: entry.id,
       sourceMemberId: entry.memberId,
       sourceDate: entry.date,
       sourceSlot: entry.slotIndex || 0,
       sourceOffset: startSlot / SCHEDULE_SLOTS,
+      grabSlotOffset: grabSlotOffset // Adicionado para precisão no drop
     }));
     e.dataTransfer.effectAllowed = "all";
     const dragIcon = document.createElement("div");
@@ -647,7 +656,7 @@ function ScheduleCell({
       const colWidth = rect.width;
       
       const slotWidth = colWidth / SCHEDULE_SLOTS;
-      const targetStartSlot = Math.max(0, Math.min(Math.round(x / slotWidth), SCHEDULE_SLOTS - 1));
+      const targetStartSlot = Math.max(0, Math.min(Math.round((x / slotWidth) - (data.grabSlotOffset || 0)), SCHEDULE_SLOTS - 1));
       const targetStartOffset = targetStartSlot / SCHEDULE_SLOTS;
 
       const y = e.clientY - rect.top;
