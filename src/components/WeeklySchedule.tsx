@@ -671,45 +671,62 @@ function ScheduleCell({
       const targetDurationOffset = newDurationSlots / SCHEDULE_SLOTS;
 
       if (isCopy) {
-        // Cópia: criar nova entry + novo evento no Calendar
-        const newId = nanoidLocal();
-        addEntry(memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, newDurationSlots, targetRowIndex, targetStartOffset, newId);
-        updateEntry(newId, { startSlot: targetStartSlot });
-
-        pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
-          .then(googleIds => { if (googleIds.length > 0) updateEntry(newId, { googleEventIds: googleIds }); });
+        // Cópia: 1. Primeiro criar no Google
+        try {
+          const t = await ensureGoogleToken();
+          if (!t) {
+            toast.error("Conecte-se ao Google para copiar.");
+            return;
+          }
+          const googleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
+          
+          // 2. Criar no Monitor apenas se GCal funcionou
+          const newId = nanoidLocal();
+          addEntry(
+            memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, 
+            newDurationSlots, targetRowIndex, targetStartOffset, newId, targetStartSlot, googleIds
+          );
+        } catch (err: any) {
+          console.error("GCal copy error:", err);
+          toast.error("Erro ao sincronizar cópia no Google.");
+        }
       } else {
-        // Mover: deletar eventos antigos ANTES de criar os novos (Evita duplicatas/fantasmas)
+        // Mover: 
+        // 1. Deletar antigos
         if (sourceEntry.googleEventIds?.length) {
           try {
             const t = await ensureGoogleToken();
             if (!t) {
-              toast.error("Você precisa estar logado para mover esta alocação no Google Calendar.");
+              toast.error("Conecte-se ao Google para mover.");
               return;
             }
             await deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, t);
           } catch (err: any) {
-            if (err.message && err.message.includes("AuthError")) {
-              clearGoogleToken();
-              toast.error("Sua sessão do Google expirou. Clique no botão de status (bolinha) no topo para renovar antes de mover.");
-            } else {
-              toast.error("Erro ao deletar do Google Calendar. Tente novamente.");
-            }
-            return; // Impede exclusão/movimento local se GCal falhar
+            if (err.message?.includes("AuthError")) clearGoogleToken();
+            toast.error("Erro ao limpar agenda antiga no Google.");
+            return;
           }
         }
         
-        // Se a exclusão no Google funcionou (ou não tinha nada nele), movemos localmente
+        // 2. Criar novos no Google
+        let newGoogleIds: string[] = [];
+        try {
+          newGoogleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
+        } catch (err: any) {
+          console.error("GCal move/push error:", err);
+          toast.error("Erro ao criar novos horários no Google.");
+          // Se falhou aqui, o antigo já foi deletado, mas o novo não foi criado. 
+          // Ainda assim, o monitor vai mover para manter a intenção do usuário, mas sem IDs.
+        }
+
+        // 3. Mover no Monitor
         updateEntry(data.entryId, { 
           memberId, date, slotIndex: targetRowIndex, 
           startOffset: targetStartOffset, 
           startSlot: targetStartSlot,
           duration: newDurationSlots,
-          googleEventIds: [] 
+          googleEventIds: newGoogleIds
         });
-        
-        pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
-          .then(googleIds => { if (googleIds.length > 0) updateEntry(data.entryId, { googleEventIds: googleIds }); });
       }
     } catch (err) {
       console.error("Failed to parse drop target", err);
@@ -733,40 +750,49 @@ function ScheduleCell({
       (updates.memberId !== undefined && updates.memberId !== entry.memberId);
 
     if (durationChanged || startSlotChanged || positionChanged) {
-      // Deletar eventos Google antigos
+      // 1. Validar Token Google ANTES
+      const t = await ensureGoogleToken();
+      if (!t) {
+        toast.error("Você precisa estar conectado ao Google para editar alocações.");
+        return;
+      }
+
+      // 2. Deletar eventos Google antigos
       if (entry.googleEventIds?.length) {
         try {
-          const t = await ensureGoogleToken();
-          if (!t) {
-            toast.error("Você precisa estar logado para editar esta alocação no Google Calendar.");
-            return;
-          }
           await deleteEventsFromGoogleCalendar(entry.googleEventIds, t);
         } catch (err: any) {
-          if (err.message && err.message.includes("AuthError")) {
+          console.error("GCal resize/delete error:", err);
+          if (err.message?.includes("AuthError")) {
             clearGoogleToken();
-            toast.error("Sua sessão do Google expirou. Clique no botão de status (bolinha) no topo para renovar antes de editar.");
+            toast.error("Sessão expirada. Conecte-se novamente.");
           } else {
-            toast.error("Erro ao deletar do Google Calendar. Tente novamente.");
+            toast.error("Erro ao sincronizar com Google. Ação cancelada.");
           }
-          return; // Impede exclusões des sincronizadas se houver falha
+          return; // Aborta para não desincronizar
         }
       }
 
-      // Atualizar localmente zerando os IDs para não ter fantasmas atrelados
-      updateEntry(entryId, { ...updates, googleEventIds: [] });
-      
-      // Criar novos eventos com os dados atualizados convertidos para o GCal
+      // 3. Criar novos no Google
+      let newGoogleIds: string[] = [];
       const newDuration = updates.duration ?? entry.duration;
       const newStartSlot = updates.startSlot ?? entry.startSlot;
       const gCalDuration = toGCalDuration(entry, newDuration, newStartSlot);
       const gCalStartOffset = toGCalStartOffset(entry, newStartSlot);
-      
       const newMemberId = updates.memberId ?? entry.memberId;
-      const googleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, entry.projectId, entry.customLabel);
-      if (googleIds.length > 0) {
-        updateEntry(entryId, { googleEventIds: googleIds });
+
+      try {
+        newGoogleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, entry.projectId, entry.customLabel);
+      } catch (err: any) {
+        console.error("GCal resize/push error:", err);
+        toast.error("Aviso: Houve um erro ao criar os novos horários no Google.");
       }
+      
+      // 4. Salvar tudo no Monitor de uma vez só
+      updateEntry(entryId, { 
+        ...updates, 
+        googleEventIds: newGoogleIds 
+      });
     } else {
       updateEntry(entryId, updates);
     }
