@@ -27,61 +27,66 @@ export async function pushEventToGoogleCalendar(
   const CENTRAL_EMAIL = "projeto@thepublic.house";
   const TZ = "America/Sao_Paulo";
 
-  const duration = entry.duration ?? 0.5;
-  const startOffset = entry.startOffset ?? 0;
-  const numPeriods = Math.min(10, Math.max(1, Math.ceil(duration * 2)));
-
-  const MORNING   = { start: "10:00:00", end: "13:00:00" };
-  const AFTERNOON = { start: "14:00:00", end: "18:00:00" };
-
-  let isAfternoon = startOffset >= 0.5;
+  // Cada unidade 1.0 representa 8 slots (1 dia útil de 10h as 18h).
+  // startOffset 0 = 10h, 0.5 = 14h, etc.
+  let remainingSlots = Math.round((entry.duration ?? 0.5) * 8);
+  let currentStartSlot = Math.round((entry.startOffset ?? 0) * 8);
   let currentDateStr = entry.startDate;
 
   try {
-    for (let p = 0; p < numPeriods; p++) {
-      const period = isAfternoon ? AFTERNOON : MORNING;
-      const startDT = `${currentDateStr}T${period.start}${TZ_OFFSET}`;
-      const endDT   = `${currentDateStr}T${period.end}${TZ_OFFSET}`;
+    // Loop para dividir em vários dias se necessário
+    while (remainingSlots > 0) {
+      // Máximo de slots disponíveis no dia atual (8 slots/dia)
+      const slotsAvailableToday = 8 - currentStartSlot;
+      const slotsToday = Math.min(remainingSlots, slotsAvailableToday);
 
-      const gEvent = {
-        summary: projectName,
-        start: { dateTime: startDT, timeZone: TZ },
-        end:   { dateTime: endDT,   timeZone: TZ },
-        attendees: [
-          ...(memberEmail ? [{ email: memberEmail }] : []),
-        ],
-        description: "Sincronizado via Monitor PUB",
-        reminders: { useDefault: false, overrides: [] },
-      };
+      if (slotsToday > 0) {
+        const startHour = 10 + currentStartSlot;
+        const endHour = startHour + slotsToday;
 
-      const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CENTRAL_EMAIL)}/events?sendUpdates=none`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(gEvent),
+        const startDT = `${currentDateStr}T${String(startHour).padStart(2, '0')}:00:00${TZ_OFFSET}`;
+        const endDT   = `${currentDateStr}T${String(endHour).padStart(2, '0')}:00:00${TZ_OFFSET}`;
+
+        const gEvent = {
+          summary: projectName,
+          start: { dateTime: startDT, timeZone: TZ },
+          end:   { dateTime: endDT,   timeZone: TZ },
+          attendees: [
+            ...(memberEmail ? [{ email: memberEmail }] : []),
+          ],
+          description: "Sincronizado via Monitor PUB",
+          reminders: { useDefault: false, overrides: [] },
+        };
+
+        const res = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CENTRAL_EMAIL)}/events?sendUpdates=none`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(gEvent),
+          }
+        );
+
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          const msg = body.error?.message || res.statusText;
+          console.error("Erro Google API (POST):", res.status, body);
+          return { ids: eventIds, error: `${res.status}: ${msg}` };
         }
-      );
 
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        const msg = body.error?.message || res.statusText;
-        console.error("Erro Google API (POST):", res.status, body);
-        return { ids: eventIds, error: `${res.status}: ${msg}` };
+        const data = await res.json();
+        eventIds.push(data.id);
       }
 
-      const data = await res.json();
-      eventIds.push(data.id);
-
-      if (isAfternoon) {
-        currentDateStr = nextWeekday(currentDateStr);
-        isAfternoon = false;
-      } else {
-        isAfternoon = true;
-      }
+      remainingSlots -= slotsToday;
+      currentStartSlot = 0; // Próximo dia começa do slot 0 (10h)
+      currentDateStr = nextWeekday(currentDateStr);
+      
+      // Safety break para evitar loop infinito em caso de erro de lógica
+      if (remainingSlots > 50) break; 
     }
     return { ids: eventIds };
   } catch (e: any) {
