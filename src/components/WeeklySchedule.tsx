@@ -590,13 +590,17 @@ function ScheduleCell({
   const handleProjectSelect = async (projectId: string, customLabel?: string) => {
     if (!selectedActivity) return;
     if (isPastDate(date) && !window.confirm("Atenção: você está adicionando uma alocação em um dia que já passou. Deseja continuar?")) return;
-    // Gera ID antecipadamente para poder salvar os IDs do GCal de volta
-    const newId = nanoidLocal();
-    // Deixa o slotIndex como undefined para o contexto calcular automaticamente o próximo livre
-    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, 0.5, undefined, 0, newId);
 
-    // Push imediato ao Google Calendar (startOffset=0 → manhã)
-    const googleIds = await pushToCalendar(date, 0.5, 0, memberId, projectId, customLabel);
+    const newId = nanoidLocal();
+    const durationSlots = 4; // default 4 slots
+    const startSlot = 0;     // default morning
+    
+    // Deixa o slotIndex como undefined para o contexto calcular automaticamente o próximo livre
+    addEntry(memberId, date, selectedActivity.id, projectId || undefined, customLabel, durationSlots, undefined, startSlot / SCHEDULE_SLOTS, newId);
+    updateEntry(newId, { startSlot, duration: durationSlots }); // marca do novo sistema
+
+    // Push ao Google Calendar repassando como fração (padrão do pushToCalendar originado no googleCalendar.ts)
+    const googleIds = await pushToCalendar(date, durationSlots / SCHEDULE_SLOTS, startSlot / SCHEDULE_SLOTS, memberId, projectId, customLabel);
     if (googleIds.length > 0) {
       updateEntry(newId, { googleEventIds: googleIds });
     }
@@ -617,14 +621,17 @@ function ScheduleCell({
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const x = e.clientX - rect.left;
       const colWidth = rect.width;
-      let targetOffset = x > colWidth * 0.5 ? 0.5 : 0;
+      
+      const slotWidth = colWidth / SCHEDULE_SLOTS;
+      const targetStartSlot = Math.max(0, Math.min(Math.round(x / slotWidth), SCHEDULE_SLOTS - 1));
+      const targetStartOffset = targetStartSlot / SCHEDULE_SLOTS;
 
       const y = e.clientY - rect.top;
-      let targetSlot = Math.min(2, Math.max(0, Math.floor(y / 22)));
+      let targetRowIndex = Math.min(2, Math.max(0, Math.floor(y / 22)));
 
       const isCopy = e.altKey;
       const isDifferentPos = data.sourceMemberId !== memberId || data.sourceDate !== date ||
-        data.sourceSlot !== targetSlot || data.sourceOffset !== targetOffset;
+        data.sourceSlot !== targetRowIndex || data.sourceOffset !== targetStartOffset;
 
       if (!data.entryId || (!isDifferentPos && !isCopy)) return;
 
@@ -635,20 +642,49 @@ function ScheduleCell({
         return;
       }
 
+      const { durationSlots } = entryToSlots(sourceEntry);
+      const newDurationSlots = Math.min(durationSlots, SCHEDULE_SLOTS - targetStartSlot);
+      const targetDurationOffset = newDurationSlots / SCHEDULE_SLOTS;
+
       if (isCopy) {
         // Cópia: criar nova entry + novo evento no Calendar
         const newId = nanoidLocal();
-        addEntry(memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, sourceEntry.duration, targetSlot, targetOffset, newId);
-        pushToCalendar(date, sourceEntry.duration || 0.5, targetOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
+        addEntry(memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, newDurationSlots, targetRowIndex, targetStartOffset, newId);
+        updateEntry(newId, { startSlot: targetStartSlot });
+
+        pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
           .then(googleIds => { if (googleIds.length > 0) updateEntry(newId, { googleEventIds: googleIds }); });
       } else {
-        // Mover: deletar eventos antigos, criar novos
+        // Mover: deletar eventos antigos ANTES de criar os novos (Evita duplicatas/fantasmas)
         if (sourceEntry.googleEventIds?.length) {
-          const t = await ensureGoogleToken();
-          if (t) deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, t).catch(console.error);
+          try {
+            const t = await ensureGoogleToken();
+            if (!t) {
+              toast.error("Você precisa estar logado para mover esta alocação no Google Calendar.");
+              return;
+            }
+            await deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, t);
+          } catch (err: any) {
+            if (err.message && err.message.includes("AuthError")) {
+              clearGoogleToken();
+              toast.error("Sua sessão do Google expirou. Clique no botão de status (bolinha) no topo para renovar antes de mover.");
+            } else {
+              toast.error("Erro ao deletar do Google Calendar. Tente novamente.");
+            }
+            return; // Impede exclusão/movimento local se GCal falhar
+          }
         }
-        updateEntry(data.entryId, { memberId, date, slotIndex: targetSlot, startOffset: targetOffset, googleEventIds: [] });
-        pushToCalendar(date, sourceEntry.duration || 0.5, targetOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
+        
+        // Se a exclusão no Google funcionou (ou não tinha nada nele), movemos localmente
+        updateEntry(data.entryId, { 
+          memberId, date, slotIndex: targetRowIndex, 
+          startOffset: targetStartOffset, 
+          startSlot: targetStartSlot,
+          duration: newDurationSlots,
+          googleEventIds: [] 
+        });
+        
+        pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel)
           .then(googleIds => { if (googleIds.length > 0) updateEntry(data.entryId, { googleEventIds: googleIds }); });
       }
     } catch (err) {
@@ -675,10 +711,25 @@ function ScheduleCell({
     if (durationChanged || startSlotChanged || positionChanged) {
       // Deletar eventos Google antigos
       if (entry.googleEventIds?.length) {
-        const t = await ensureGoogleToken();
-        if (t) deleteEventsFromGoogleCalendar(entry.googleEventIds, t).catch(console.error);
+        try {
+          const t = await ensureGoogleToken();
+          if (!t) {
+            toast.error("Você precisa estar logado para editar esta alocação no Google Calendar.");
+            return;
+          }
+          await deleteEventsFromGoogleCalendar(entry.googleEventIds, t);
+        } catch (err: any) {
+          if (err.message && err.message.includes("AuthError")) {
+            clearGoogleToken();
+            toast.error("Sua sessão do Google expirou. Clique no botão de status (bolinha) no topo para renovar antes de editar.");
+          } else {
+            toast.error("Erro ao deletar do Google Calendar. Tente novamente.");
+          }
+          return; // Impede exclusões des sincronizadas se houver falha
+        }
       }
-      // Atualizar localmente zerando os IDs
+
+      // Atualizar localmente zerando os IDs para não ter fantasmas atrelados
       updateEntry(entryId, { ...updates, googleEventIds: [] });
       
       // Criar novos eventos com os dados atualizados convertidos para o GCal
@@ -700,21 +751,35 @@ function ScheduleCell({
   // 4. DELETAR
   const handleRemoveEntry = async (entryId: string) => {
     const entry = scheduleState.entries.find(e => e.id === entryId);
-    if (entry && isPastDate(entry.date)) {
-      if (!window.confirm("Atenção: você está excluindo uma alocação de um dia que já passou. Deseja continuar?")) return;
+    if (!entry) return;
+    
+    if (isPastDate(entry.date) && !window.confirm("Atenção: você está excluindo uma alocação de um dia que já passou. Deseja continuar?")) {
+      return;
     }
     
-    // CHAMAR REMOVE IMEDIATAMENTE PARA UX RÁPIDA
-    removeEntry(entryId);
-
-    if (entry?.googleEventIds?.length) {
-      const t = await ensureGoogleToken();
-      if (t) {
-        deleteEventsFromGoogleCalendar(entry.googleEventIds, t).catch(err => {
+    // Garantir exclusão no Google ANTES de deletar localmente, para evitar eventos "fantasma"
+    if (entry.googleEventIds?.length) {
+      try {
+        const t = await ensureGoogleToken();
+        if (!t) {
+          toast.error("Você precisa estar logado no Google para excluir esta alocação.");
+          return;
+        }
+        await deleteEventsFromGoogleCalendar(entry.googleEventIds, t);
+      } catch (err: any) {
+        if (err.message && err.message.includes("AuthError")) {
+          clearGoogleToken();
+          toast.error("Sua sessão do Google expirou. Clique no botão de status (bolinha) no topo para renovar antes de excluir.");
+        } else {
           console.error("GCal delete error:", err);
-        });
+          toast.error("Erro ao deletar do Google Calendar. Tente novamente.");
+        }
+        return; // Impede exclusão local se GCal falhar
       }
     }
+
+    // Exclusão local segura
+    removeEntry(entryId);
   };
 
   const handleClose = () => {

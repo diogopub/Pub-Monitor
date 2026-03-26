@@ -108,10 +108,19 @@ export async function deleteEventsFromGoogleCalendar(eventIds: string[], token: 
         }
       );
       if (!res.ok) {
-        console.error("Erro deletando evento:", res.status);
+        if (res.status === 401 || res.status === 403) {
+          throw new Error(`AuthError: ${res.status}`);
+        }
+        // 404 (Not Found) or 410 (Gone) are fine, the event is already gone
+        if (res.status !== 404 && res.status !== 410) {
+          console.error("Erro deletando evento:", res.status);
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Network error deleting event:", e);
+      if (e.message && e.message.includes("AuthError")) {
+        throw e; // Repassa erro crítico de permissão
+      }
     }
   }
 }
