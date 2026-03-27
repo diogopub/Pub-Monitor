@@ -1328,8 +1328,10 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       if (err.message?.includes("401")) {
         clearGoogleToken();
         toast.error("Sessão expirada. Faça login novamente no botão Google Sync.", { id: toastId });
+      } else if (err.message?.includes("403")) {
+        toast.error("Erro 403 (Proibido). O usuário 'projeto@thepublic.house' não tem permissão para gerenciar a agenda de um ou mais membros. Verifique o compartilhamento no Google Calendar.", { id: toastId, duration: 8000 });
       } else {
-        toast.error(`Erro inesperado: ${err.message || 'Erro desconhecido'}`, { id: toastId });
+        toast.error(`Erro inesperado: ${err.message || 'Erro desconhecido'}. Dica: Se estiver no Vercel, verifique se a URL do preview está autorizada no Google Cloud Console (Referrers).`, { id: toastId, duration: 8000 });
       }
     }
   };
