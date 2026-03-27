@@ -643,6 +643,10 @@ function ScheduleCell({
     setSelectedActivity(null);
   };
 
+  // ─── Cálculo de Altura Dinâmica ────────────────────────────────
+  const maxSlot = entries.reduce((acc, e) => Math.max(acc, e.slotIndex || 0), 2);
+  const dynamicHeight = (maxSlot + 1) * 22 + 2;
+
   // 2. MOVER ou COPIAR (drag & drop)
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
@@ -660,7 +664,8 @@ function ScheduleCell({
       const targetStartOffset = targetStartSlot / SCHEDULE_SLOTS;
 
       const y = e.clientY - rect.top;
-      let targetRowIndex = Math.min(2, Math.max(0, Math.floor(y / 22)));
+      // Removido o cap de Math.min(2, ...) para permitir crescimento dinâmico da linha
+      let targetRowIndex = Math.max(0, Math.floor(y / 22));
 
       const isCopy = e.altKey;
       const isDifferentPos = data.sourceMemberId !== memberId || data.sourceDate !== date ||
@@ -860,7 +865,8 @@ function ScheduleCell({
     }}>
       <PopoverTrigger asChild>
         <div
-          className="h-[68px] relative cursor-pointer hover:bg-black/5 rounded-sm"
+          className="relative cursor-pointer hover:bg-black/5 w-full"
+          style={{ height: `${dynamicHeight}px` }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
@@ -1383,7 +1389,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
               return (
                 <tr key={row.id} className={`group/row hover:bg-accent/10 transition-colors ${isEntrada ? "min-h-[64px]" : ""}`}>
-                  <td className={`px-2 border-b border-border bg-card/30 sticky left-0 z-10 w-fit ${isEntrada ? "py-3" : "py-1.5"}`}>
+                  <td className="px-2 py-2 border-b border-border bg-card/30 sticky left-0 z-10 w-fit align-middle">
                     <div className="flex items-center gap-1 group/rowlabel">
                       {/* Move Controls */}
                       <div className="flex flex-col -space-y-1 mr-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
