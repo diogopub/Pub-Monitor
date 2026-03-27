@@ -42,6 +42,8 @@ import {
   ChevronUp,
   ChevronDown,
   UserX,
+  RotateCw,
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -1205,10 +1207,104 @@ function AddMemberToWeekPopover({
 
 export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week" | "fortnight" | "month" }) {
   const { state: networkState } = useNetwork();
-  const { state: scheduleState, getWeekRoster, setWeekRoster } = useSchedule();
+  const { state: scheduleState, getWeekRoster, setWeekRoster, updateEntry } = useSchedule();
   const { state: cardsState } = useProjectCards();
-  const { googleAccessToken, loginWithGoogle } = useAuth();
+  const { googleAccessToken, loginWithGoogle, ensureGoogleToken, clearGoogleToken } = useAuth();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // ─── Shared Helpers ─────────────────────────────────────────────
+  const getMemberEmail = (mId: string): string => {
+    const member = networkState.members.find(m => m.id === mId);
+    return member?.email || "";
+  };
+
+  const getProjectName = (projectId?: string, customLabel?: string): string => {
+    if (customLabel) return customLabel.toUpperCase();
+    if (!projectId) return "";
+    const card = cardsState.cards.find(c => c.id === projectId);
+    return card?.name?.toUpperCase() || "";
+  };
+
+  const handleForceSync = async () => {
+    if (isSyncing) return;
+    
+    const validToken = await ensureGoogleToken();
+    if (!validToken) {
+      toast.error("Google Calendar não autorizado. Faça login novamente.");
+      return;
+    }
+
+    // Identificar entradas que estão na visão atual (membros do roster + datas visíveis)
+    const visibleMemberIds = new Set(weekRosterIds);
+    const visibleDates = new Set(weekDays.map(d => formatDate(d)));
+    
+    const entriesToSync = scheduleState.entries.filter(e => 
+      visibleMemberIds.has(e.memberId) && visibleDates.has(e.date)
+    );
+
+    if (entriesToSync.length === 0) {
+      toast.info("Nenhuma atividade encontrada nesta visão para sincronizar.");
+      return;
+    }
+
+    setIsSyncing(true);
+    const toastId = toast.loading(`Sincronizando ${entriesToSync.length} atividades...`);
+    
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < entriesToSync.length; i++) {
+      const entry = entriesToSync[i];
+      const memberEmail = getMemberEmail(entry.memberId);
+      const projectName = getProjectName(entry.projectId, entry.customLabel);
+
+      if (!memberEmail || !projectName) {
+        failCount++;
+        continue;
+      }
+
+      try {
+        // 1. Limpar GCal atual se existir
+        if (entry.googleEventIds?.length) {
+          await deleteEventsFromGoogleCalendar(entry.googleEventIds, memberEmail, validToken);
+        }
+
+        // 2. Novo Push
+        const gCalDuration = toGCalDuration(entry);
+        const gCalStartOffset = toGCalStartOffset(entry);
+        
+        const response = await pushEventToGoogleCalendar(
+          { startDate: entry.date, duration: gCalDuration, startOffset: gCalStartOffset },
+          projectName,
+          memberEmail,
+          validToken
+        );
+
+        if (response.ids && response.ids.length > 0) {
+          updateEntry(entry.id, { googleEventIds: response.ids });
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch (err) {
+        console.error(`Falha ao sincronizar entrada ${entry.id}:`, err);
+        failCount++;
+      }
+      
+      // Update progress in toast semi-frequently
+      if (i % 3 === 0 || i === entriesToSync.length - 1) {
+        toast.loading(`Sincronizando... (${i + 1}/${entriesToSync.length})`, { id: toastId });
+      }
+    }
+
+    setIsSyncing(false);
+    if (failCount === 0) {
+      toast.success(`Sincronia concluída! ${successCount} atividades atualizadas no Google Calendar.`, { id: toastId });
+    } else {
+      toast.error(`Sincronia finalizada com avisos. ${successCount} ok, ${failCount} falhas.`, { id: toastId });
+    }
+  };
 
   useEffect(() => {
     if (viewMode === "month") {
@@ -1315,6 +1411,26 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                 {googleAccessToken ? 'Google Sync' : 'Renovar Sync'}
               </span>
             </button>
+          </div>
+
+          <div className="flex items-center gap-2 pr-2 border-r border-border">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleForceSync}
+              disabled={isSyncing}
+              className="h-7 w-auto px-2 gap-2 text-muted-foreground hover:text-primary transition-colors"
+              title="Re-sincronizar todas as atividades visíveis com o Google Calendar"
+            >
+              {isSyncing ? (
+                <RefreshCcw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCw className="w-3.5 h-3.5" />
+              )}
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                {isSyncing ? 'Sincronizando...' : 'Forçar Sync'}
+              </span>
+            </Button>
           </div>
 
           <div className="flex items-center gap-2">
