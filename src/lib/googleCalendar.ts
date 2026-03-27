@@ -5,7 +5,8 @@ const TZ = "America/Sao_Paulo";
 const MAX_SLOTS = 40; // equivalente a ~5 dias úteis de 8 slots
 
 function resolveCalendar(email?: string): string {
-  return email || "projeto@thepublic.house";
+  if (!email) throw new Error("Email do calendário é obrigatório para sincronização.");
+  return email;
 }
 
 function formatLocalISODate(date: Date): string {

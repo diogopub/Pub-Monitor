@@ -1267,10 +1267,9 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     
     try {
       // 2. PURGE: Limpar todos os eventos do monitor nos calendários envolvidos para este período
-      const uniqueEmails = Array.from(new Set([
-        ...visibleMemberIds.map(id => getMemberEmail(id)).filter(Boolean),
-        "projeto@thepublic.house" 
-      ]));
+      const uniqueEmails = Array.from(new Set(
+        visibleMemberIds.map(id => getMemberEmail(id)).filter(Boolean)
+      ));
 
       for (let j = 0; j < uniqueEmails.length; j++) {
         const email = uniqueEmails[j];
