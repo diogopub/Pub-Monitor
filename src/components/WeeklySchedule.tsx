@@ -709,7 +709,8 @@ function ScheduleCell({
               toast.error("Conecte-se ao Google para mover.");
               return;
             }
-            await deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, t);
+            const memberEmail = getMemberEmail(sourceEntry.memberId);
+            await deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, memberEmail || "", t);
           } catch (err: any) {
             if (err.message?.includes("AuthError")) clearGoogleToken();
             toast.error("Erro ao limpar agenda antiga no Google.");
@@ -769,7 +770,8 @@ function ScheduleCell({
       // 2. Deletar eventos Google antigos
       if (entry.googleEventIds?.length) {
         try {
-          await deleteEventsFromGoogleCalendar(entry.googleEventIds, t);
+          const memberEmail = getMemberEmail(entry.memberId);
+          await deleteEventsFromGoogleCalendar(entry.googleEventIds, memberEmail || "", t);
         } catch (err: any) {
           console.error("GCal resize/delete error:", err);
           if (err.message?.includes("AuthError")) {
@@ -824,7 +826,8 @@ function ScheduleCell({
           toast.error("Você precisa estar logado no Google para excluir esta alocação.");
           return;
         }
-        await deleteEventsFromGoogleCalendar(entry.googleEventIds, t);
+        const memberEmail = getMemberEmail(entry.memberId);
+        await deleteEventsFromGoogleCalendar(entry.googleEventIds, memberEmail || "", t);
       } catch (err: any) {
         if (err.message && err.message.includes("AuthError")) {
           clearGoogleToken();
