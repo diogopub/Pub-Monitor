@@ -1,8 +1,14 @@
 // ─── Google Calendar sync ─────────────────────────────────────────────────────
 
-const TZ_OFFSET = "-03:00"; // Brasilia Time
+const MONITOR_EVENT_TAG = "Sincronizado via Monitor PUB";
+const TZ = "America/Sao_Paulo";
+const MAX_SLOTS = 40; // equivalente a ~5 dias úteis de 8 slots
 
-function formatLocalISOData(date: Date): string {
+function resolveCalendar(email?: string): string {
+  return email || "projeto@thepublic.house";
+}
+
+function formatLocalISODate(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
@@ -10,11 +16,15 @@ function formatLocalISOData(date: Date): string {
 }
 
 function nextWeekday(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
+  const d = new Date(dateStr + "T12:00:00Z");
   do {
     d.setDate(d.getDate() + 1);
   } while (d.getDay() === 0 || d.getDay() === 6);
-  return formatLocalISOData(d);
+  return formatLocalISODate(d);
+}
+
+function isIgnorableDeleteError(status?: number): boolean {
+  return status === 404 || status === 410;
 }
 
 export async function pushEventToGoogleCalendar(
@@ -24,14 +34,20 @@ export async function pushEventToGoogleCalendar(
   token: string
 ): Promise<{ ids: string[]; error?: string }> {
   const eventIds: string[] = [];
-  const TARGET_CALENDAR = memberEmail || "projeto@thepublic.house";
-  const TZ = "America/Sao_Paulo";
+  const targetCalendar = resolveCalendar(memberEmail);
 
   // Cada unidade 1.0 representa 8 slots (1 dia útil de 10h as 18h).
   // startOffset 0 = 10h, 0.5 = 14h, etc.
   let remainingSlots = Math.round((entry.duration ?? 0.5) * 8);
   let currentStartSlot = Math.round((entry.startOffset ?? 0) * 8);
   let currentDateStr = entry.startDate;
+
+  if (remainingSlots > MAX_SLOTS) {
+    return {
+      ids: [],
+      error: "Duração excede o limite permitido."
+    };
+  }
 
   try {
     // Loop para dividir em vários dias se necessário
@@ -42,21 +58,22 @@ export async function pushEventToGoogleCalendar(
 
       if (slotsToday > 0) {
         const startHour = 10 + currentStartSlot;
-        const endHour = startHour + slotsToday;
+        const endHour = Math.min(startHour + slotsToday, 24);
 
-        const startDT = `${currentDateStr}T${String(startHour).padStart(2, '0')}:00:00${TZ_OFFSET}`;
-        const endDT   = `${currentDateStr}T${String(endHour).padStart(2, '0')}:00:00${TZ_OFFSET}`;
+        // Define datetime sem offset hardcoded, usando timezone explícito no body
+        const startDT = `${currentDateStr}T${String(startHour).padStart(2, '0')}:00:00`;
+        const endDT   = `${currentDateStr}T${String(endHour).padStart(2, '0')}:00:00`;
 
         const gEvent = {
           summary: projectName,
           start: { dateTime: startDT, timeZone: TZ },
           end:   { dateTime: endDT,   timeZone: TZ },
-          description: "Sincronizado via Monitor PUB",
+          description: MONITOR_EVENT_TAG,
           reminders: { useDefault: false, overrides: [] },
         };
 
         const res = await fetch(
-          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(TARGET_CALENDAR)}/events?sendUpdates=none`,
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?sendUpdates=none`,
           {
             method: "POST",
             headers: {
@@ -70,7 +87,6 @@ export async function pushEventToGoogleCalendar(
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           const msg = body.error?.message || res.statusText;
-          console.error("Erro Google API (POST):", res.status, body);
           if (res.status === 401 || res.status === 403) {
             throw new Error(`AuthError: ${res.status}`);
           }
@@ -78,31 +94,32 @@ export async function pushEventToGoogleCalendar(
         }
 
         const data = await res.json();
-        eventIds.push(data.id);
+        if (data.id) {
+            eventIds.push(data.id);
+        }
       }
 
       remainingSlots -= slotsToday;
       currentStartSlot = 0; // Próximo dia começa do slot 0 (10h)
-      currentDateStr = nextWeekday(currentDateStr);
-      
-      // Safety break para evitar loop infinito em caso de erro de lógica
-      if (remainingSlots > 50) break; 
+      if (remainingSlots > 0) {
+        currentDateStr = nextWeekday(currentDateStr);
+      }
     }
     return { ids: eventIds };
-  } catch (e: any) {
-    if (e.message && e.message.includes("AuthError")) throw e;
-    console.error("Erro de rede GCal:", e);
-    return { ids: eventIds, error: e.message };
+  } catch (error) {
+    if (error instanceof Error) {
+        if (error.message.includes("AuthError")) throw error;
+        return { ids: eventIds, error: error.message };
+    }
+    return { ids: eventIds, error: "Unknown error" };
   }
 }
 
-export async function deleteEventsFromGoogleCalendar(eventIds: string[], memberEmail: string, token: string) {
-  const TARGET_CALENDAR = memberEmail || "projeto@thepublic.house";
-  for (const id of eventIds) {
-    if (!id) continue;
+async function deleteSingleEvent(id: string, calendarId: string, token: string): Promise<void> {
+    if (!id) return;
     try {
       const res = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(TARGET_CALENDAR)}/events/${id}?sendUpdates=none`,
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}?sendUpdates=none`,
         {
           method: "DELETE",
           headers: { "Authorization": `Bearer ${token}` },
@@ -112,17 +129,29 @@ export async function deleteEventsFromGoogleCalendar(eventIds: string[], memberE
         if (res.status === 401 || res.status === 403) {
           throw new Error(`AuthError: ${res.status}`);
         }
-        // 404 (Not Found) or 410 (Gone) are fine, the event is already gone
-        if (res.status !== 404 && res.status !== 410) {
-          console.error("Erro deletando evento:", res.status);
+        if (!isIgnorableDeleteError(res.status)) {
+           throw new Error(`Delete failed with status ${res.status}`);
         }
       }
-    } catch (e: any) {
-      console.error("Network error deleting event:", e);
-      if (e.message && e.message.includes("AuthError")) {
-        throw e; // Repassa erro crítico de permissão
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes("AuthError")) throw error; // Repassa erro crítico
       }
+      throw error;
     }
+}
+
+export async function deleteEventsFromGoogleCalendar(eventIds: string[], memberEmail: string, token: string) {
+  const targetCalendar = resolveCalendar(memberEmail);
+  const results = await Promise.allSettled(
+      eventIds.filter(Boolean).map(id => deleteSingleEvent(id, targetCalendar, token))
+  );
+  
+  // Se houver algum erro de AuthError, devemos explodir
+  for (const result of results) {
+     if (result.status === 'rejected' && result.reason instanceof Error && result.reason.message.includes("AuthError")) {
+          throw result.reason;
+     }
   }
 }
 
@@ -136,35 +165,62 @@ export async function purgeMonitorEventsInRange(
   timeMin: string, // ISO string
   timeMax: string, // ISO string
   token: string
-) {
-  const TARGET_CALENDAR = memberEmail || "projeto@thepublic.house";
+): Promise<{ deleted: number; failed: number }> {
+  const targetCalendar = resolveCalendar(memberEmail);
+  let pageToken: string | undefined = undefined;
+  const idsToDelete: string[] = [];
+
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(TARGET_CALENDAR)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=2500`,
-      {
-        headers: { "Authorization": `Bearer ${token}` }
+    do {
+      let url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=2500`;
+      if (pageToken) {
+          url += `&pageToken=${encodeURIComponent(pageToken)}`;
       }
-    );
+
+      const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
+      
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) throw new Error(`AuthError: ${res.status}`);
+        break; // Ignora pacotes de erro silenciosamente se não for Auth (fallback)
+      }
+
+      const data = await res.json();
+      if (!data.items) break;
+
+      const monitorEvents = data.items.filter((ev: any) => 
+        ev.description === MONITOR_EVENT_TAG
+      );
+
+      monitorEvents.forEach((ev: any) => {
+         if (ev.id) idsToDelete.push(ev.id);
+      });
+
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    if (idsToDelete.length === 0) return { deleted: 0, failed: 0 };
     
-    if (!res.ok) {
-      if (res.status === 401) throw new Error("AuthError: 401");
-      return;
-    }
-
-    const data = await res.json();
-    if (!data.items) return;
-
-    // Filtra apenas eventos que o monitor criou
-    const monitorEvents = data.items.filter((ev: any) => 
-      ev.description === "Sincronizado via Monitor PUB"
+    const results = await Promise.allSettled(
+        idsToDelete.map(id => deleteSingleEvent(id, targetCalendar, token))
     );
 
-    const idsToDelete = monitorEvents.map((ev: any) => ev.id);
-    if (idsToDelete.length > 0) {
-      await deleteEventsFromGoogleCalendar(idsToDelete, memberEmail, token);
+    let deleted = 0;
+    let failed = 0;
+
+    for (const result of results) {
+       if (result.status === "fulfilled") {
+          deleted++;
+       } else {
+          failed++;
+          if (result.reason instanceof Error && result.reason.message.includes("AuthError")) {
+             throw result.reason;
+          }
+       }
     }
-  } catch (err: any) {
-    if (err.message?.includes("AuthError")) throw err;
-    console.error("Purge error:", err);
+
+    return { deleted, failed };
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("AuthError")) throw error;
+    return { deleted: 0, failed: 0 };
   }
 }
