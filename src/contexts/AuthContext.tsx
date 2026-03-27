@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { 
   onAuthStateChanged,
   signInWithPopup,
@@ -8,6 +8,37 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { toast } from "sonner";
+
+// ─── Constants ───────────────────────────────────────────────────
+const GOOGLE_TOKEN_TTL_MS = 55 * 60 * 1000;
+const GOOGLE_TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+
+const STORAGE_KEYS = {
+  TOKEN: "g_token",
+  EXPIRES: "g_token_expires"
+} as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────
+function isTokenExpired(expiresAt: number): boolean {
+  if (!expiresAt) return true;
+  // Expira se o tempo atual for maior que (expiração - buffer de segurança)
+  return Date.now() > (expiresAt - GOOGLE_TOKEN_REFRESH_BUFFER_MS);
+}
+
+function getAuthErrorMessage(code?: string): string {
+  switch (code) {
+    case "auth/popup-blocked":
+      return "O navegador bloqueou o login. Por favor, permita popups para este site.";
+    case "auth/popup-closed-by-user":
+      return "Login cancelado.";
+    case "auth/unauthorized-domain":
+      return "Domínio não autorizado no Firebase. Verifique as configurações do console.";
+    case "auth/network-request-failed":
+      return "Erro de conexão. Verifique sua internet.";
+    default:
+      return "Erro ao autenticar com Google. Tente novamente.";
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -24,7 +55,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(() => sessionStorage.getItem("g_token"));
+
+  // Inicializa validando se o token no storage ainda é útil
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(() => {
+    const saved = sessionStorage.getItem(STORAGE_KEYS.TOKEN);
+    const expires = Number(sessionStorage.getItem(STORAGE_KEYS.EXPIRES) || "0");
+    
+    if (saved && !isTokenExpired(expires)) {
+      return saved;
+    }
+    
+    // Se existir mas estiver expirado, limpa logo no boot
+    if (saved) {
+      sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
+      sessionStorage.removeItem(STORAGE_KEYS.EXPIRES);
+    }
+    return null;
+  });
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -34,61 +81,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const clearGoogleToken = () => {
+  const clearGoogleToken = useCallback(() => {
     setGoogleAccessToken(null);
-    sessionStorage.removeItem("g_token");
-    sessionStorage.removeItem("g_token_expires");
-  };
+    sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
+    sessionStorage.removeItem(STORAGE_KEYS.EXPIRES);
+  }, []);
+
+  const saveGoogleToken = useCallback((token: string) => {
+    const expiresAt = Date.now() + GOOGLE_TOKEN_TTL_MS;
+    setGoogleAccessToken(token);
+    sessionStorage.setItem(STORAGE_KEYS.TOKEN, token);
+    sessionStorage.setItem(STORAGE_KEYS.EXPIRES, String(expiresAt));
+  }, []);
 
   const ensureGoogleToken = async () => {
-    const token = sessionStorage.getItem("g_token");
-    if (!token) return null;
-    
-    const expiresAt = Number(sessionStorage.getItem("g_token_expires") || "0");
-    // Se o token expirar nos próximos 5 minutos (ou já expirou), renova
-    if (Date.now() > expiresAt) {
-      try {
-        console.log("Auto-renovando token do Google...");
-        const result = await signInWithPopup(auth, googleProvider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential?.accessToken) {
-          setGoogleAccessToken(credential.accessToken);
-          sessionStorage.setItem("g_token", credential.accessToken);
-          sessionStorage.setItem("g_token_expires", String(Date.now() + 3300 * 1000)); // 55 minutos
-          return credential.accessToken;
-        }
-      } catch (error: any) {
-        if (error.code === 'auth/popup-blocked') {
-          toast.error("O navegador bloqueou a renovação. Clique no botão de Renovar Sync.");
-        } else {
-          console.error("Falha ao auto-renovar token", error);
-        }
-        clearGoogleToken();
-        return null;
-      }
+    const token = sessionStorage.getItem(STORAGE_KEYS.TOKEN);
+    const expiresAt = Number(sessionStorage.getItem(STORAGE_KEYS.EXPIRES) || "0");
+
+    if (!token || isTokenExpired(expiresAt)) {
+      // Se não tem token ou expirou, não abre popup automaticamente.
+      // Apenas limpa o estado e retorna null para que o chamador decida o que fazer.
+      if (token) clearGoogleToken();
+      return null;
     }
+    
     return token;
   };
 
   const loginWithGoogle = async () => {
     try {
-      // Antes de logar, limpa o antigo
+      // Limpa estado anterior por segurança
       clearGoogleToken();
+      
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
+      
       if (credential?.accessToken) {
-        setGoogleAccessToken(credential.accessToken);
-        sessionStorage.setItem("g_token", credential.accessToken);
-        sessionStorage.setItem("g_token_expires", String(Date.now() + 3300 * 1000)); // 55 minutos
+        saveGoogleToken(credential.accessToken);
+        toast.success("Acesso Google renovado!");
       }
-      toast.success("Acesso Google renovado!");
-    } catch (error: any) {
-      console.error("Erro ao fazer login:", error);
-      const errorCode = error.code || "unknown";
-      toast.error(`Falha ao entrar com Google: ${errorCode}`);
-
-      if (errorCode === "auth/unauthorized-domain") {
-        console.error("ERRO: O domínio do Vercel não está autorizado no Console do Firebase.");
+    } catch (error) {
+      if (error instanceof Error) {
+        const firebaseError = error as { code?: string };
+        const message = getAuthErrorMessage(firebaseError.code);
+        toast.error(message);
+      } else {
+        toast.error("Erro inesperado ao autenticar.");
       }
     }
   };
@@ -99,12 +137,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearGoogleToken();
       toast.info("Você saiu do sistema");
     } catch (error) {
-      console.error("Erro ao fazer logout:", error);
+      // Logout raramente falha, mas tratamos com erro genérico se ocorrer
+      toast.error("Houve um problema ao sair do sistema.");
     }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout, clearGoogleToken, googleAccessToken, ensureGoogleToken }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      loginWithGoogle, 
+      logout, 
+      clearGoogleToken, 
+      googleAccessToken, 
+      ensureGoogleToken 
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -117,3 +164,4 @@ export function useAuth() {
   }
   return context;
 }
+
