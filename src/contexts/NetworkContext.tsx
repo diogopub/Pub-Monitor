@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { nanoid } from "nanoid";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
 import { sanitizeForFirestore } from "@/lib/utils";
@@ -45,6 +45,7 @@ export interface NetworkState {
 
 interface NetworkContextType {
   state: NetworkState;
+  hydrated: boolean;
   // Members
   addMember: (name: string, role: MemberRole, color: string, email?: string) => void;
   updateMember: (id: string, updates: Partial<Omit<TeamMember, "id">>) => void;
@@ -78,53 +79,27 @@ export const ROLE_LABELS: Record<MemberRole, string> = {
   management: "Gestão",
 };
 
-// ─── Default data ────────────────────────────────────────────────
-const defaultMembers: TeamMember[] = [
-  { id: "m1", name: "Rod", role: "creative", color: "#dc2626", email: "rod@thepublic.house" },
-  { id: "m2", name: "Paula", role: "architect", color: "#16a34a" },
-  { id: "m3", name: "Paola", role: "architect", color: "#16a34a", email: "paola@thepublic.house" },
-  { id: "m4", name: "Marcel", role: "3d", color: "#2563eb", email: "marcel@thepublic.house" },
-  { id: "m5", name: "Julio", role: "3d", color: "#2563eb", email: "julio@thepublic.house" },
-  { id: "m6", name: "Evandro", role: "3d", color: "#2563eb", email: "evandro@thepublic.house" },
-  { id: "m7", name: "Mari", role: "3d", color: "#2563eb", email: "mariana@thepublic.house" },
-  { id: "TdyNfZ0C", name: "Vinicius", role: "creative", color: "#7c3aed" }
-];
+// ─── Helpers ─────────────────────────────────────────────────────
+function normalizeNetworkState(data: any): NetworkState {
+  const projects: Project[] = Array.isArray(data?.projects) ? data.projects : [];
+  
+  // Garantir a existência do PUB INTERNO sem gerar loops de renderização
+  if (!projects.some(p => p.name === "PUB INTERNO")) {
+    projects.push({
+      id: nanoid(8),
+      name: "PUB INTERNO",
+      color: "#ffffff",
+      status: "active",
+    });
+  }
 
-const defaultProjects: Project[] = [
-  { id: "8IkoPBzY", name: "GULOZITOS", color: "#64748b", status: "active" },
-  { id: "GPhSiPJl", name: "SESC SENAC", color: "#64748b", status: "active" },
-  { id: "VLEC3mz6", name: "TIKTOK", color: "#64748b", status: "active" },
-  { id: "2S4yXlfs", name: "TNS SUMMIT", color: "#64748b", status: "active" },
-  { id: "tNT6ivzP", name: "BEFLY BE TOGETHER", color: "#64748b", status: "active" },
-  { id: "2iJoYkNk", name: "MBRF", color: "#64748b", status: "active" },
-  { id: "Kyx_zt5V", name: "NESTLÉ", color: "#64748b", status: "active" },
-  { id: "zwTpeSmf", name: "HONDA INTERLAGOS", color: "#64748b", status: "completed" },
-  { id: "TorDd7bS", name: "GEELY EX5", color: "#64748b", status: "completed" },
-  { id: "aXJB3qkC", name: "KITKAT RIR", color: "#64748b", status: "completed" },
-  { id: "3ge1eg7M", name: "BOTICÁRIO DIA MÃES", color: "#64748b", status: "completed" },
-  { id: "5x0gQuhc", name: "JETOUR", color: "#64748b", status: "completed" },
-  { id: "94ngjY7L", name: "PBSF PACAEMBU", color: "#64748b", status: "completed" },
-  { id: "PyiUJCTY", name: "P&G PDV", color: "#64748b", status: "completed" },
-  { id: "3JsUW-c9", name: "TIM RIR", color: "#64748b", status: "completed" },
-  { id: "PVcrCz_L", name: "MERCEDES 70 ANOS", color: "#64748b", status: "completed" },
-  { id: "K51HlkO1", name: "ZAMP", color: "#64748b", status: "completed" },
-  { id: "6ytgKP2r", name: "MBRF", color: "#64748b", status: "completed" },
-  { id: "Gjb1Y4YF", name: "OTO SYNGENTA", color: "#64748b", status: "completed" },
-  { id: "OYuO3QyQ", name: "CLARO RIO OPEN", color: "#64748b", status: "completed" },
-  { id: "Ft6-CNpK", name: "PIRACANJUBA", color: "#64748b", status: "completed" },
-  { id: "zLLNiirf", name: "XP RIO OPEN", color: "#64748b", status: "completed" },
-  { id: "R0Do3qf0", name: "HAVAIANAS", color: "#64748b", status: "completed" },
-  { id: "UJIlYtn9", name: "CIELO LOLLA", color: "#64748b", status: "completed" },
-  { id: "JdodsLuE", name: "FORD INTERLAGOS", color: "#64748b", status: "active" },
-  { id: "Wr72p_7y", name: "COCA COLA NATAL", color: "#64748b", status: "active" },
-  { id: "n6yC51hh", name: "TCL GAMES COM", color: "#64748b", status: "active" },
-  { id: "VYp2d9kn", name: "MERCEDES FENATRAN", color: "#64748b", status: "active" },
-  { id: "Epfz7_ji", name: "SANTANDER INTERLAGOS", color: "#64748b", status: "active" }
-];
-
-const defaultAssignments: Assignment[] = [
-  { id: "qbIXKpGv", memberId: "m2", projectId: "2iJoYkNk", role: "architect" }
-];
+  return {
+    members: Array.isArray(data?.members) ? data.members : [],
+    projects,
+    assignments: Array.isArray(data?.assignments) ? data.assignments : [],
+    settings: data?.settings || { autoBackupEnabled: false },
+  };
+}
 
 // ─── Persistence ─────────────────────────────────────────────────
 const STORAGE_KEY = "pub-network-state";
@@ -139,20 +114,13 @@ function loadState(): NetworkState {
         Array.isArray(parsed.projects) &&
         Array.isArray(parsed.assignments)
       ) {
-        return parsed;
+        return normalizeNetworkState(parsed);
       }
     }
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
-  return {
-    members: defaultMembers,
-    projects: defaultProjects,
-    assignments: defaultAssignments,
-    settings: {
-      autoBackupEnabled: false,
-    },
-  };
+  return normalizeNetworkState({});
 }
 
 function saveState(state: NetworkState) {
@@ -168,9 +136,16 @@ const NetworkContext = createContext<NetworkContextType | null>(null);
 
 export function NetworkProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<NetworkState>(loadState);
+  const [hydrated, setHydrated] = useState(false);
   const { user } = useAuth();
   const { currentUserRole } = usePermissions();
+
   const canWrite = currentUserRole === "admin" || currentUserRole === "editor";
+  const canWriteRef = useRef(canWrite);
+
+  useEffect(() => {
+    canWriteRef.current = canWrite;
+  }, [canWrite]);
 
   // ☁️ SYNC FROM CLOUD — real-time listener, merges into local state
   useEffect(() => {
@@ -178,39 +153,32 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
 
     const docRef = doc(db, "data", "network");
     const unsub = onSnapshot(docRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const cloudData = snapshot.data() as NetworkState;
-        setStateInternal(cloudData);
-        saveState(cloudData);
-      }
+      const cloudData = normalizeNetworkState(snapshot.exists() ? snapshot.data() : {});
+      setStateInternal(cloudData);
+      saveState(cloudData);
+      setHydrated(true);
     });
 
     return () => unsub();
   }, [user]);
 
   // ☁️ SYNC TO CLOUD
-  // Uses setDoc with merge:false but only after computing the full next state.
-  // For per-field concurrent safety, we pass the whole document.
-  // NetworkContext changes (members/projects) are infrequent enough that
-  // full-document write is acceptable here. Entries (ScheduleContext) use
-  // subcollections for true concurrent safety.
+  // O Updater fica puramente local e o side-effect é executado com a ref
   const updateState = useCallback((updater: (prev: NetworkState) => NetworkState) => {
+    let nextState: NetworkState | undefined;
+
     setStateInternal((prev) => {
-      const next = updater(prev);
-      saveState(next);
-
-      if (canWrite) {
-        // Use Promise.resolve to move Firestore write out of React's state updater
-        Promise.resolve().then(() => {
-          setDoc(doc(db, "data", "network"), sanitizeForFirestore(next)).catch(err => {
-            console.error("Network sync error:", err);
-          });
-        });
-      }
-
-      return next;
+      nextState = updater(prev);
+      saveState(nextState);
+      return nextState;
     });
-  }, [canWrite]);
+
+    if (canWriteRef.current && nextState) {
+      setDoc(doc(db, "data", "network"), sanitizeForFirestore(nextState)).catch(err => {
+        console.error("Network sync error:", err);
+      });
+    }
+  }, []);
 
   const addMember = useCallback(
     (name: string, role: MemberRole, color: string, email?: string) => {
@@ -317,21 +285,17 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
 
   const setState = useCallback(
     (newState: NetworkState) => {
-      const validatedState: NetworkState = {
-        members: newState.members || [],
-        projects: newState.projects || [],
-        assignments: newState.assignments || [],
-        settings: newState.settings || { autoBackupEnabled: false },
-      };
+      const validatedState = normalizeNetworkState(newState);
       saveState(validatedState);
       setStateInternal(validatedState);
-      if (canWrite) {
+      
+      if (canWriteRef.current) {
         setDoc(doc(db, "data", "network"), sanitizeForFirestore(validatedState)).catch(err => {
           console.error("Network bulk setState error:", err);
         });
       }
     },
-    [canWrite]
+    []
   );
 
   const updateSettings = useCallback(
@@ -344,17 +308,11 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     [updateState]
   );
 
-  // 🛡️ Ensure PUB INTERNO exists in projects for graph connections
-  useEffect(() => {
-    if (state.projects.length > 0 && !state.projects.some(p => p.name === "PUB INTERNO")) {
-      addProject("PUB INTERNO", "#ffffff");
-    }
-  }, [state.projects, addProject]);
-
   return (
     <NetworkContext.Provider
       value={{
         state,
+        hydrated,
         addMember,
         updateMember,
         removeMember,
