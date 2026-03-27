@@ -86,14 +86,20 @@ interface ProjectCardsContextType {
   removeTeamMember: (cardId: string, memberId: string) => void;
   addFeedEntry: (cardId: string, message: string) => void;
   removeFeedEntry: (cardId: string, feedId: string) => void;
-  setState: (state: ProjectCardsState) => void;
+  setState: (state: ProjectCardsState) => Promise<void>;
 }
 
 const STORAGE_KEY = "pub-project-cards-v2";
 const CARDS_COLLECTION = "project_cards";
 
-function createDefaultDocuments(): ProjectDocument[] {
-  return DEFAULT_DOCUMENTS.map((d) => ({ ...d, id: nanoid(8) }));
+// ─── Helpers ─────────────────────────────────────────────────────
+
+function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
 }
 
 function migrateTeam(team: any): TeamMember[] {
@@ -108,7 +114,13 @@ function migrateTeam(team: any): TeamMember[] {
 function loadLocalState(): ProjectCardsState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : { cards: [] };
+    if (!saved) return { cards: [] };
+    const parsed = JSON.parse(saved);
+    const cards = (parsed.cards || []).map((c: any) => ({
+      ...c,
+      team: migrateTeam(c.team),
+    }));
+    return { cards };
   } catch { return { cards: [] }; }
 }
 
@@ -134,9 +146,9 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
         const c = d.data() as any;
         cards.push({
           ...c,
-          id: c.id || d.id,
+          id: (typeof c.id === 'string' && c.id.trim()) ? c.id : d.id,
           team: migrateTeam(c.team),
-          documents: Array.isArray(c.documents) ? c.documents : createDefaultDocuments(),
+          documents: Array.isArray(c.documents) ? c.documents : [],
           feed: Array.isArray(c.feed) ? c.feed : [],
           timelinePins: Array.isArray(c.timelinePins) ? c.timelinePins.map((p: any) => ({
             ...p,
@@ -154,197 +166,269 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
 
   // Operations
   const addCard = useCallback((data: Omit<ProjectCardData, "id" | "documents" | "feed">) => {
-    const newCard: ProjectCardData = { ...data, id: nanoid(8), documents: createDefaultDocuments(), feed: [] };
+    const newCard: ProjectCardData = { ...data, id: nanoid(8), documents: [], feed: [] };
     setStateInternal(prev => {
       const next = { ...prev, cards: [...prev.cards, newCard] };
       saveLocalState(next);
-      if (canWrite) setDoc(doc(db, CARDS_COLLECTION, newCard.id), sanitizeForFirestore(newCard)).catch(console.error);
       return next;
     });
+
+    if (canWrite) {
+      setDoc(doc(db, CARDS_COLLECTION, newCard.id), sanitizeForFirestore(newCard)).catch(console.error);
+    }
   }, [canWrite]);
 
   const updateCard = useCallback((id: string, updates: Partial<ProjectCardData>) => {
     setStateInternal(prev => {
       const next = { ...prev, cards: prev.cards.map(c => c.id === id ? { ...c, ...updates } : c) };
       saveLocalState(next);
-      if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, id), sanitizeForFirestore(updates)).catch(console.error);
       return next;
     });
+
+    if (canWrite) {
+      updateDoc(doc(db, CARDS_COLLECTION, id), sanitizeForFirestore(updates)).catch(console.error);
+    }
   }, [canWrite]);
 
   const removeCard = useCallback((id: string) => {
     setStateInternal(prev => {
       const next = { ...prev, cards: prev.cards.filter(c => c.id !== id) };
       saveLocalState(next);
-      if (canWrite) deleteDoc(doc(db, CARDS_COLLECTION, id)).catch(console.error);
       return next;
     });
+
+    if (canWrite) {
+      deleteDoc(doc(db, CARDS_COLLECTION, id)).catch(console.error);
+    }
   }, [canWrite]);
 
   const toggleDocument = useCallback((cardId: string, docId: string) => {
+    let updatedDocs: ProjectDocument[] | null = null;
+    let updatedFeed: FeedEntry[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const d = c.documents.find(d => d.id === docId);
-        if (!d) return c;
-        const newEnabled = !d.enabled;
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-        const dateStr = now.toLocaleDateString("pt-BR");
-        
-        const newFeed = newEnabled ? [{ id: nanoid(8), message: `${d.label} de ${c.name} enviado às ${timeStr} de ${dateStr}`, timestamp: now.toISOString() }, ...c.feed] : c.feed;
-        const newDocs = c.documents.map(doc => doc.id === docId ? { ...doc, enabled: newEnabled, sentAt: newEnabled ? now.toISOString() : undefined } : doc);
-        
-        const updated = { ...c, documents: newDocs, feed: newFeed };
-        if (canWrite) setDoc(doc(db, CARDS_COLLECTION, cardId), sanitizeForFirestore(updated)).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      const d = card.documents.find(doc => doc.id === docId);
+      if (!d) return prev;
+
+      const newEnabled = !d.enabled;
+      const now = new Date();
+      const timeStr = formatTime(now);
+      const dateStr = now.toLocaleDateString("pt-BR");
+
+      updatedDocs = card.documents.map(doc => doc.id === docId ? { 
+        ...doc, 
+        enabled: newEnabled, 
+        sentAt: newEnabled ? now.toISOString() : undefined 
+      } : doc);
+
+      updatedFeed = newEnabled 
+        ? [{ id: nanoid(8), message: `${d.label} de ${card.name} enviado às ${timeStr} de ${dateStr}`, timestamp: now.toISOString() }, ...card.feed] 
+        : card.feed;
+
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, documents: updatedDocs!, feed: updatedFeed! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && updatedDocs && updatedFeed) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { 
+        documents: sanitizeForFirestore(updatedDocs), 
+        feed: sanitizeForFirestore(updatedFeed) 
+      }).catch(console.error);
+    }
   }, [canWrite]);
 
   const addDocument = useCallback((cardId: string, label: string) => {
+    let newDocs: ProjectDocument[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, documents: [...c.documents, { id: nanoid(8), label, enabled: false }] };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { documents: sanitizeForFirestore(updated.documents) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      newDocs = [...card.documents, { id: nanoid(8), label, enabled: false }];
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, documents: newDocs! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && newDocs) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { documents: sanitizeForFirestore(newDocs) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const removeDocument = useCallback((cardId: string, docId: string) => {
+    let newDocs: ProjectDocument[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, documents: c.documents.filter(d => d.id !== docId) };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { documents: sanitizeForFirestore(updated.documents) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      newDocs = card.documents.filter(d => d.id !== docId);
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, documents: newDocs! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && newDocs) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { documents: sanitizeForFirestore(newDocs) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const reorderDocument = useCallback((cardId: string, docId: string, direction: "up" | "down") => {
+    let newDocs: ProjectDocument[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const docs = [...c.documents];
-        const idx = docs.findIndex(d => d.id === docId);
-        if (idx < 0) return c;
-        const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-        if (swapIdx < 0 || swapIdx >= docs.length) return c;
-        [docs[idx], docs[swapIdx]] = [docs[swapIdx], docs[idx]];
-        const updated = { ...c, documents: docs };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { documents: sanitizeForFirestore(updated.documents) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      const docs = [...card.documents];
+      const idx = docs.findIndex(d => d.id === docId);
+      if (idx < 0) return prev;
+
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= docs.length) return prev;
+
+      [docs[idx], docs[swapIdx]] = [docs[swapIdx], docs[idx]];
+      newDocs = docs;
+
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, documents: newDocs! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && newDocs) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { documents: sanitizeForFirestore(newDocs) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const addTeamMember = useCallback((cardId: string, role: TeamMember["role"], name: string) => {
+    let nextTeam: TeamMember[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, team: [...c.team, { id: nanoid(8), role, name }] };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { team: sanitizeForFirestore(updated.team) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      nextTeam = [...card.team, { id: nanoid(8), role, name }];
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, team: nextTeam! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && nextTeam) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { team: sanitizeForFirestore(nextTeam) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const updateTeamMember = useCallback((cardId: string, memberId: string, name: string) => {
+    let nextTeam: TeamMember[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, team: c.team.map(t => t.id === memberId ? { ...t, name } : t) };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { team: sanitizeForFirestore(updated.team) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      nextTeam = card.team.map(t => t.id === memberId ? { ...t, name } : t);
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, team: nextTeam! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && nextTeam) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { team: sanitizeForFirestore(nextTeam) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const removeTeamMember = useCallback((cardId: string, memberId: string) => {
+    let nextTeam: TeamMember[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, team: c.team.filter(t => t.id !== memberId) };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { team: sanitizeForFirestore(updated.team) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      nextTeam = card.team.filter(t => t.id !== memberId);
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, team: nextTeam! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && nextTeam) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { team: sanitizeForFirestore(nextTeam) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const addFeedEntry = useCallback((cardId: string, message: string) => {
+    let nextFeed: FeedEntry[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, feed: [{ id: nanoid(8), message, timestamp: new Date().toISOString() }, ...c.feed] };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { feed: sanitizeForFirestore(updated.feed) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      nextFeed = [{ id: nanoid(8), message, timestamp: new Date().toISOString() }, ...card.feed];
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, feed: nextFeed! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && nextFeed) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { feed: sanitizeForFirestore(nextFeed) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const removeFeedEntry = useCallback((cardId: string, feedId: string) => {
+    let nextFeed: FeedEntry[] | null = null;
+
     setStateInternal(prev => {
-      const nextCards = prev.cards.map(c => {
-        if (c.id !== cardId) return c;
-        const updated = { ...c, feed: c.feed.filter(f => f.id !== feedId) };
-        if (canWrite) updateDoc(doc(db, CARDS_COLLECTION, cardId), { feed: sanitizeForFirestore(updated.feed) }).catch(console.error);
-        return updated;
-      });
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card) return prev;
+
+      nextFeed = card.feed.filter(f => f.id !== feedId);
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, feed: nextFeed! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
+
+    if (canWrite && nextFeed) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { feed: sanitizeForFirestore(nextFeed) }).catch(console.error);
+    }
   }, [canWrite]);
 
   const setStateBulk = useCallback(async (newState: ProjectCardsState) => {
     const validated: ProjectCardsState = { cards: newState.cards || [] };
+    
+    // Otimista
+    setStateInternal(validated);
+    saveLocalState(validated);
+
     if (canWrite) {
       try {
         const existing = await getDocs(collection(db, CARDS_COLLECTION));
         const deleteBatch = writeBatch(db);
         existing.forEach(d => deleteBatch.delete(d.ref));
         await deleteBatch.commit();
+
         const addBatch = writeBatch(db);
         validated.cards.forEach(c => addBatch.set(doc(db, CARDS_COLLECTION, c.id), sanitizeForFirestore(c)));
         await addBatch.commit();
       } catch (err) { console.error("Bulk setState error:", err); }
     }
-    saveLocalState(validated);
-    setStateInternal(validated);
   }, [canWrite]);
 
   return (
     <ProjectCardsContext.Provider value={{
       state, addCard, updateCard, removeCard, toggleDocument, addDocument, removeDocument,
       reorderDocument, addTeamMember, updateTeamMember, removeTeamMember, addFeedEntry, removeFeedEntry,
-      setState: setStateBulk as any,
+      setState: setStateBulk,
     }}>
       {children}
     </ProjectCardsContext.Provider>
@@ -356,3 +440,4 @@ export function useProjectCards() {
   if (!ctx) throw new Error("useProjectCards must be used within ProjectCardsProvider");
   return ctx;
 }
+
