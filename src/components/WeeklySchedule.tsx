@@ -60,6 +60,12 @@ function toGCalStartOffset(entry: ScheduleEntry, overrideStartSlot?: number): nu
   return entry.startOffset ?? 0;
 }
 
+function slotToTime(slot: number): string {
+  const hour = 10 + Math.floor(slot);
+  const minutes = Math.round((slot % 1) * 60);
+  return `${hour.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+}
+
 // ─── Date helpers ────────────────────────────────────────────────
 function getMonday(d: Date): Date {
   const date = new Date(d);
@@ -457,6 +463,18 @@ function TaskBar({
       }}
       onClick={(e) => e.stopPropagation()}
     >
+      {/* ── Floating Time Labels (Resizing) ─── */}
+      {isResizing && (
+        <>
+          <div className="absolute -top-7 left-0 bg-black/80 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-lg border border-white/20 z-[9999] whitespace-nowrap -translate-x-1/2">
+            {slotToTime(displayStart)}
+          </div>
+          <div className="absolute -top-7 right-0 bg-black/80 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-lg border border-white/20 z-[9999] whitespace-nowrap translate-x-1/2">
+            {slotToTime(displayStart + displayDur)}
+          </div>
+        </>
+      )}
+
       {/* ── LEFT resize handle ─── */}
       <div
         className="absolute left-0 top-0 bottom-0 w-2.5 flex items-center justify-center cursor-ew-resize hover:bg-black/20 rounded-l border-r border-white/20 z-20 opacity-0 group-hover/bar:opacity-100 transition-opacity"
@@ -685,63 +703,59 @@ function ScheduleCell({
       const targetDurationOffset = newDurationSlots / SCHEDULE_SLOTS;
 
       if (isCopy) {
-        // Cópia: 1. Primeiro criar no Google
-        try {
-          const t = await ensureGoogleToken();
-          if (!t) {
-            toast.error("Conecte-se ao Google para copiar.");
-            return;
-          }
-          const googleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
-          
-          // 2. Criar no Monitor apenas se GCal funcionou
-          const newId = nanoidLocal();
-          addEntry(
-            memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, 
-            newDurationSlots, targetRowIndex, targetStartOffset, newId, targetStartSlot, googleIds
-          );
-        } catch (err: any) {
-          console.error("GCal copy error:", err);
-          toast.error("Erro ao sincronizar cópia no Google.");
-        }
-      } else {
-        // Mover: 
-        // 1. Deletar antigos
-        if (sourceEntry.googleEventIds?.length) {
-          try {
-            const t = await ensureGoogleToken();
-            if (!t) {
-              toast.error("Conecte-se ao Google para mover.");
-              return;
-            }
-            const memberEmail = getMemberEmail(sourceEntry.memberId);
-            await deleteEventsFromGoogleCalendar(sourceEntry.googleEventIds, memberEmail || "", t);
-          } catch (err: any) {
-            if (err.message?.includes("AuthError")) clearGoogleToken();
-            toast.error("Erro ao limpar agenda antiga no Google.");
-            return;
-          }
-        }
-        
-        // 2. Criar novos no Google
-        let newGoogleIds: string[] = [];
-        try {
-          newGoogleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
-        } catch (err: any) {
-          console.error("GCal move/push error:", err);
-          toast.error("Erro ao criar novos horários no Google.");
-          // Se falhou aqui, o antigo já foi deletado, mas o novo não foi criado. 
-          // Ainda assim, o monitor vai mover para manter a intenção do usuário, mas sem IDs.
-        }
+        const newId = nanoidLocal();
+        // 1. Otimista: criar no Monitor agora
+        addEntry(
+          memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, 
+          newDurationSlots, targetRowIndex, targetStartOffset, newId, targetStartSlot, []
+        );
 
-        // 3. Mover no Monitor
+        // 2. Sincronizar em background
+        (async () => {
+          try {
+            const googleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
+            if (googleIds.length > 0) {
+              updateEntry(newId, { googleEventIds: googleIds });
+            }
+          } catch (err: any) {
+            console.error("GCal background push error:", err);
+            // On hard error, we might want to remove it, but usually, toast is enough
+            toast.error("Erro na sincronia com Google Calendar (Cópia).");
+          }
+        })();
+      } else {
+        // Mover Otimista
+        const originalState = { ...sourceEntry };
         updateEntry(data.entryId, { 
           memberId, date, slotIndex: targetRowIndex, 
           startOffset: targetStartOffset, 
           startSlot: targetStartSlot,
           duration: newDurationSlots,
-          googleEventIds: newGoogleIds
+          googleEventIds: [] // Limpa temporariamente
         });
+
+        // Background Sync
+        (async () => {
+          try {
+            const t = await ensureGoogleToken();
+            if (!t) throw new Error("Sem token");
+
+            // Deletar antigos
+            if (originalState.googleEventIds?.length) {
+              const oldEmail = getMemberEmail(originalState.memberId);
+              await deleteEventsFromGoogleCalendar(originalState.googleEventIds, oldEmail || "", t);
+            }
+
+            // Criar novos
+            const newIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
+            updateEntry(data.entryId, { googleEventIds: newIds });
+          } catch (err: any) {
+            console.error("GCal move transition error:", err);
+            // Reverter se for erro de autenticação crítico ou algo assim?
+            // Por enquanto vamos manter o estado local para evitar "pulos" visuais
+            toast.error("Erro ao sincronizar movimento com o Google.");
+          }
+        })();
       }
     } catch (err) {
       console.error("Failed to parse drop target", err);
@@ -765,50 +779,37 @@ function ScheduleCell({
       (updates.memberId !== undefined && updates.memberId !== entry.memberId);
 
     if (durationChanged || startSlotChanged || positionChanged) {
-      // 1. Validar Token Google ANTES
-      const t = await ensureGoogleToken();
-      if (!t) {
-        toast.error("Você precisa estar conectado ao Google para editar alocações.");
-        return;
-      }
-
-      // 2. Deletar eventos Google antigos
-      if (entry.googleEventIds?.length) {
-        try {
-          const memberEmail = getMemberEmail(entry.memberId);
-          await deleteEventsFromGoogleCalendar(entry.googleEventIds, memberEmail || "", t);
-        } catch (err: any) {
-          console.error("GCal resize/delete error:", err);
-          if (err.message?.includes("AuthError")) {
-            clearGoogleToken();
-            toast.error("Sessão expirada. Conecte-se novamente.");
-          } else {
-            toast.error("Erro ao sincronizar com Google. Ação cancelada.");
-          }
-          return; // Aborta para não desincronizar
-        }
-      }
-
-      // 3. Criar novos no Google
-      let newGoogleIds: string[] = [];
+      const originalEntry = { ...entry };
       const newDuration = updates.duration ?? entry.duration;
       const newStartSlot = updates.startSlot ?? entry.startSlot;
-      const gCalDuration = toGCalDuration(entry, newDuration, newStartSlot);
-      const gCalStartOffset = toGCalStartOffset(entry, newStartSlot);
       const newMemberId = updates.memberId ?? entry.memberId;
 
-      try {
-        newGoogleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, entry.projectId, entry.customLabel);
-      } catch (err: any) {
-        console.error("GCal resize/push error:", err);
-        toast.error("Aviso: Houve um erro ao criar os novos horários no Google.");
-      }
-      
-      // 4. Salvar tudo no Monitor de uma vez só
-      updateEntry(entryId, { 
-        ...updates, 
-        googleEventIds: newGoogleIds 
-      });
+      // 1. Atualização Otimista
+      updateEntry(entryId, { ...updates, googleEventIds: [] });
+
+      // 2. Sincronização em Background
+      (async () => {
+        try {
+          const t = await ensureGoogleToken();
+          if (!t) throw new Error("Sem autorização Google");
+
+          // Limpar antigos
+          if (originalEntry.googleEventIds?.length) {
+            const oldEmail = getMemberEmail(originalEntry.memberId);
+            await deleteEventsFromGoogleCalendar(originalEntry.googleEventIds, oldEmail || "", t);
+          }
+
+          // Criar novos
+          const gCalDuration = toGCalDuration(originalEntry, newDuration, newStartSlot);
+          const gCalStartOffset = toGCalStartOffset(originalEntry, newStartSlot);
+          const newGoogleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, originalEntry.projectId, originalEntry.customLabel);
+          
+          updateEntry(entryId, { googleEventIds: newGoogleIds });
+        } catch (err: any) {
+          console.error("GCal background update error:", err);
+          toast.error("Erro na sincronia Google. A alteração local foi mantida.");
+        }
+      })();
     } else {
       updateEntry(entryId, updates);
     }
