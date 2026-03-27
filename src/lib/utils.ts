@@ -29,6 +29,36 @@ export function sanitizeForFirestore(obj: any): any {
   return sanitized;
 }
 
+export function toUtcNoon(dateStr: string): Date {
+  return new Date(dateStr + "T12:00:00Z");
+}
+
+type EntryLike = { date: string; duration?: number; slotIndex?: number; memberId: string };
+
+export function computeAutoSlot(
+  entries: EntryLike[],
+  memberId: string,
+  dateStr: string
+): number {
+  const memberEntries = entries.filter(e => e.memberId === memberId);
+  const takenSlots = new Set<number>();
+  const targetDate = toUtcNoon(dateStr);
+  
+  memberEntries.forEach(e => {
+    const dStart = toUtcNoon(e.date);
+    const dEnd = toUtcNoon(e.date);
+    dEnd.setDate(dEnd.getDate() + Math.ceil(e.duration || 1) - 1);
+    
+    if (targetDate >= dStart && targetDate <= dEnd) {
+      takenSlots.add(e.slotIndex || 0);
+    }
+  });
+  
+  let autoSlot = 0;
+  while (takenSlots.has(autoSlot) && autoSlot < 10) autoSlot++;
+  return autoSlot;
+}
+
 // ─── 8-Slot Schedule Grid (10:00–18:00) ──────────────────────────
 
 export const SCHEDULE_SLOTS = 8;

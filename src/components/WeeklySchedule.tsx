@@ -638,11 +638,18 @@ function ScheduleCell({
       
       // 3. Criar no Monitor (Firestore) apenas se GCal funcionou (pelo menos parcial)
       const newId = nanoidLocal();
-      addEntry(
-        memberId, date, selectedActivity.id, projectId || undefined, customLabel, 
-        durationSlots, undefined, gCalStartOffset, newId, startSlot, 
-        googleIds.length > 0 ? googleIds : undefined
-      );
+      addEntry({
+        memberId, 
+        date, 
+        activityId: selectedActivity.id, 
+        projectId: projectId || undefined, 
+        customLabel, 
+        duration: durationSlots, 
+        startOffset: gCalStartOffset, 
+        id: newId, 
+        startSlot, 
+        googleEventIds: googleIds.length > 0 ? googleIds : undefined
+      });
 
       if (googleIds.length === 0) {
         toast.warning("A alocação foi criada no monitor, mas houve um problema ao sincronizar com o Google Calendar.");
@@ -707,10 +714,19 @@ function ScheduleCell({
       if (isCopy) {
         const newId = nanoidLocal();
         // 1. Otimista: criar no Monitor agora
-        addEntry(
-          memberId, date, sourceEntry.activityId, sourceEntry.projectId, sourceEntry.customLabel, 
-          newDurationSlots, targetRowIndex, targetStartOffset, newId, targetStartSlot, []
-        );
+        addEntry({
+          memberId, 
+          date, 
+          activityId: sourceEntry.activityId, 
+          projectId: sourceEntry.projectId, 
+          customLabel: sourceEntry.customLabel, 
+          duration: newDurationSlots, 
+          slotIndex: targetRowIndex, 
+          startOffset: targetStartOffset, 
+          id: newId, 
+          startSlot: targetStartSlot, 
+          googleEventIds: []
+        });
 
         // 2. Sincronizar em background
         (async () => {
