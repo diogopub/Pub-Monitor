@@ -125,3 +125,46 @@ export async function deleteEventsFromGoogleCalendar(eventIds: string[], memberE
     }
   }
 }
+
+/**
+ * Busca e deleta TODOS os eventos marcados como "Sincronizado via Monitor PUB" 
+ * dentro de um intervalo de tempo para um calendário específico.
+ * Usado na reconciliação total (Force Sync).
+ */
+export async function purgeMonitorEventsInRange(
+  memberEmail: string,
+  timeMin: string, // ISO string
+  timeMax: string, // ISO string
+  token: string
+) {
+  const TARGET_CALENDAR = memberEmail || "projeto@thepublic.house";
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(TARGET_CALENDAR)}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&maxResults=2500`,
+      {
+        headers: { "Authorization": `Bearer ${token}` }
+      }
+    );
+    
+    if (!res.ok) {
+      if (res.status === 401) throw new Error("AuthError: 401");
+      return;
+    }
+
+    const data = await res.json();
+    if (!data.items) return;
+
+    // Filtra apenas eventos que o monitor criou
+    const monitorEvents = data.items.filter((ev: any) => 
+      ev.description === "Sincronizado via Monitor PUB"
+    );
+
+    const idsToDelete = monitorEvents.map((ev: any) => ev.id);
+    if (idsToDelete.length > 0) {
+      await deleteEventsFromGoogleCalendar(idsToDelete, memberEmail, token);
+    }
+  } catch (err: any) {
+    if (err.message?.includes("AuthError")) throw err;
+    console.error("Purge error:", err);
+  }
+}

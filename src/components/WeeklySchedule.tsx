@@ -7,7 +7,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork, ROLE_COLORS, type MemberRole } from "@/contexts/NetworkContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { pushEventToGoogleCalendar, deleteEventsFromGoogleCalendar } from "@/lib/googleCalendar";
+import { pushEventToGoogleCalendar, deleteEventsFromGoogleCalendar, purgeMonitorEventsInRange } from "@/lib/googleCalendar";
 import {
   useSchedule,
   ACTIVITY_TYPES,
@@ -1235,74 +1235,91 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       return;
     }
 
-    // Identificar entradas que estão na visão atual (membros do roster + datas visíveis)
-    const visibleMemberIds = new Set(weekRosterIds);
-    const visibleDates = new Set(weekDays.map(d => formatDate(d)));
+    // 1. Identificar alcance da visão atual
+    const visibleMemberIds = Array.from(new Set(weekRosterIds));
+    const visibleDates = weekDays.map(d => formatDate(d));
+    const timeMin = new Date(weekDays[0]).toISOString().split('T')[0] + 'T00:00:00Z';
+    const lastDay = weekDays[weekDays.length - 1];
+    const timeMax = new Date(lastDay).toISOString().split('T')[0] + 'T23:59:59Z';
     
     const entriesToSync = scheduleState.entries.filter(e => 
-      visibleMemberIds.has(e.memberId) && visibleDates.has(e.date)
+      visibleMemberIds.includes(e.memberId) && visibleDates.includes(e.date)
     );
 
-    if (entriesToSync.length === 0) {
-      toast.info("Nenhuma atividade encontrada nesta visão para sincronizar.");
-      return;
-    }
-
     setIsSyncing(true);
-    const toastId = toast.loading(`Sincronizando ${entriesToSync.length} atividades...`);
+    const toastId = toast.loading(`Iniciando reconciliação profunda...`);
     
-    let successCount = 0;
-    let failCount = 0;
+    try {
+      // 2. PURGE: Limpar todos os eventos do monitor nos calendários envolvidos para este período
+      // Isso remove órfãos (eventos que existem no Google mas não no Monitor)
+      const uniqueEmails = Array.from(new Set([
+        ...visibleMemberIds.map(id => getMemberEmail(id)).filter(Boolean),
+        "projeto@thepublic.house" // Sempre limpa o central também para evitar fantasmas do sistema antigo
+      ]));
 
-    for (let i = 0; i < entriesToSync.length; i++) {
-      const entry = entriesToSync[i];
-      const memberEmail = getMemberEmail(entry.memberId);
-      const projectName = getProjectName(entry.projectId, entry.customLabel);
-
-      if (!memberEmail || !projectName) {
-        failCount++;
-        continue;
+      for (let j = 0; j < uniqueEmails.length; j++) {
+        const email = uniqueEmails[j];
+        toast.loading(`Limpando agenda: ${email}...`, { id: toastId });
+        await purgeMonitorEventsInRange(email, timeMin, timeMax, validToken);
       }
 
-      try {
-        // 1. Limpar GCal atual se existir
-        if (entry.googleEventIds?.length) {
-          await deleteEventsFromGoogleCalendar(entry.googleEventIds, memberEmail, validToken);
+      // 3. PUSH: Re-inserir todas as atividades que existem no Monitor atualmente
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < entriesToSync.length; i++) {
+        const entry = entriesToSync[i];
+        const memberEmail = getMemberEmail(entry.memberId);
+        const projectName = getProjectName(entry.projectId, entry.customLabel);
+
+        if (!memberEmail || !projectName) {
+          failCount++;
+          continue;
         }
 
-        // 2. Novo Push
-        const gCalDuration = toGCalDuration(entry);
-        const gCalStartOffset = toGCalStartOffset(entry);
-        
-        const response = await pushEventToGoogleCalendar(
-          { startDate: entry.date, duration: gCalDuration, startOffset: gCalStartOffset },
-          projectName,
-          memberEmail,
-          validToken
-        );
+        try {
+          const gCalDuration = toGCalDuration(entry);
+          const gCalStartOffset = toGCalStartOffset(entry);
+          
+          const response = await pushEventToGoogleCalendar(
+            { startDate: entry.date, duration: gCalDuration, startOffset: gCalStartOffset },
+            projectName,
+            memberEmail,
+            validToken
+          );
 
-        if (response.ids && response.ids.length > 0) {
-          updateEntry(entry.id, { googleEventIds: response.ids });
-          successCount++;
-        } else {
+          if (response.ids && response.ids.length > 0) {
+            updateEntry(entry.id, { googleEventIds: response.ids });
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          console.error(`Falha ao empurrar entrada ${entry.id}:`, err);
           failCount++;
         }
-      } catch (err) {
-        console.error(`Falha ao sincronizar entrada ${entry.id}:`, err);
-        failCount++;
+        
+        if (i % 3 === 0 || i === entriesToSync.length - 1) {
+          toast.loading(`Re-inserindo atividades... (${i + 1}/${entriesToSync.length})`, { id: toastId });
+        }
       }
-      
-      // Update progress in toast semi-frequently
-      if (i % 3 === 0 || i === entriesToSync.length - 1) {
-        toast.loading(`Sincronizando... (${i + 1}/${entriesToSync.length})`, { id: toastId });
-      }
-    }
 
-    setIsSyncing(false);
-    if (failCount === 0) {
-      toast.success(`Sincronia concluída! ${successCount} atividades atualizadas no Google Calendar.`, { id: toastId });
-    } else {
-      toast.error(`Sincronia finalizada com avisos. ${successCount} ok, ${failCount} falhas.`, { id: toastId });
+      setIsSyncing(false);
+      if (failCount === 0) {
+        toast.success(`Sincronia Total! Agendas limpas e ${successCount} atividades restabelecidas.`, { id: toastId });
+      } else {
+        toast.error(`Sincronia finalizada com avisos. ${successCount} ok, ${failCount} falhas.`, { id: toastId });
+      }
+
+    } catch (err: any) {
+      setIsSyncing(false);
+      console.error("Force Sync Error:", err);
+      if (err.message?.includes("401")) {
+        clearGoogleToken();
+        toast.error("Sessão Google expirou durante a sincronia. Tente novamente.", { id: toastId });
+      } else {
+        toast.error("Erro crítico na reconciliação das agendas.", { id: toastId });
+      }
     }
   };
 
