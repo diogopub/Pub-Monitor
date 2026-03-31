@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 import Configuracoes from "./pages/Configuracoes";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { LoginMenu } from "./components/LoginMenu";
+import { RemindersProvider } from "./contexts/RemindersContext";
 
 function BackupManager() {
   useAutoBackup();
@@ -37,26 +38,28 @@ function App() {
         <AuthProvider>
           <PermissionsProvider>
             <NetworkProvider>
-          <ScheduleProvider>
-            <ProjectCardsProvider>
-              <BackupManager />
-              <LoginMenu />
-              <TooltipProvider>
-                <Toaster
-                  theme="dark"
-                  toastOptions={{
-                    style: {
-                      background: "oklch(0.16 0.025 260)",
-                      border: "1px solid oklch(0.28 0.02 260)",
-                      color: "oklch(0.92 0.01 250)",
-                    },
-                  }}
-                />
-                <Router />
-              </TooltipProvider>
-            </ProjectCardsProvider>
-          </ScheduleProvider>
-        </NetworkProvider>
+              <ScheduleProvider>
+                <ProjectCardsProvider>
+                  <RemindersProvider>
+                    <BackupManager />
+                    <LoginMenu />
+                    <TooltipProvider>
+                      <Toaster
+                        theme="dark"
+                        toastOptions={{
+                          style: {
+                            background: "oklch(0.16 0.025 260)",
+                            border: "1px solid oklch(0.28 0.02 260)",
+                            color: "oklch(0.92 0.01 250)",
+                          },
+                        }}
+                      />
+                      <Router />
+                    </TooltipProvider>
+                  </RemindersProvider>
+                </ProjectCardsProvider>
+              </ScheduleProvider>
+            </NetworkProvider>
           </PermissionsProvider>
         </AuthProvider>
       </ThemeProvider>

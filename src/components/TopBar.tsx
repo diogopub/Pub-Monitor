@@ -12,10 +12,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Filter, Download, Upload, MoreVertical } from "lucide-react";
+import { Filter, Download, Upload, MoreVertical, StickyNote as StickyIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, Link } from "wouter";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useReminders } from "@/contexts/RemindersContext";
 
 interface TopBarProps {
   filterRole?: MemberRole | "all";
@@ -28,6 +29,7 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
   const { state: networkState, setState: setNetworkState } = useNetwork();
   const { state: scheduleState, setState: setScheduleState } = useSchedule();
   const { state: cardsState, setState: setCardsState } = useProjectCards();
+  const { addReminder } = useReminders();
   const [location] = useLocation();
 
   const handleExport = () => {
@@ -163,6 +165,18 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
           </button>
         </div>
       )}
+
+      {/* Post-it Creator */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-9 px-3 gap-2 text-muted-foreground hover:text-yellow-400 transition-colors"
+        onClick={() => addReminder(window.innerWidth / 2 - 90, window.innerHeight / 2 - 90)}
+        title="Novo Post-it"
+      >
+        <StickyIcon className="w-4 h-4" />
+        <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-wider">Novo Recado</span>
+      </Button>
 
       {/* Filter — only on Painel */}
       {filterRole !== undefined && onFilterChange && (
