@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DailyAllocationPanel from "@/components/DailyAllocationPanel";
+import { entryToSlots } from "@/lib/utils";
 
 function FooterTaskBar({
   entry,
@@ -36,7 +37,7 @@ function FooterTaskBar({
         width: `calc(${duration * 100}% - 2px + ${paddingCompensation}px)`,
         height: '15px',
       }}
-      title={proj ? proj.name : act.label}
+      title={`${proj ? proj.name : act.label} (${entryToSlots(entry).durationSlots <= 4 ? "0.5" : "1.0"} diária)`}
     >
       <div className="flex-1 truncate text-center px-1">
         {proj ? proj.name : act.label}
@@ -208,14 +209,22 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
                           className={`px-2 py-0.5 sticky left-0 z-20 backdrop-blur-sm border-t border-white/5 ${isHighlighted ? "bg-white/10" : "bg-black/15"}`}
                           style={{ height: `${rowHeight}px` }}
                         >
-                          <div className="flex items-center gap-1.5 h-full">
-                            <div
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${isHighlighted ? "ring-1 ring-white/40" : ""}`}
-                              style={{ backgroundColor: row.color }}
-                            />
-                            <span className={`text-[9px] font-medium truncate max-w-[60px] ${isHighlighted ? "text-white/90" : "text-white/60"}`}>
-                              {row.name}
-                            </span>
+                          <div className="flex flex-col justify-center h-full gap-0.5">
+                            <div className="flex items-center gap-1.5 pt-1">
+                              <div
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isHighlighted ? "ring-1 ring-white/40" : ""}`}
+                                style={{ backgroundColor: row.color }}
+                              />
+                              <span className={`text-[9px] font-medium truncate max-w-[60px] ${isHighlighted ? "text-white/90" : "text-white/60"}`}>
+                                {row.name}
+                              </span>
+                            </div>
+                            <div className="text-[7px] text-white/40 font-mono pl-3">
+                              {weekDays.reduce((acc, day) => {
+                                const entries = getEntriesForCell(row.id, formatDate(day));
+                                return acc + entries.reduce((dayAcc, e) => dayAcc + (entryToSlots(e).durationSlots <= 4 ? 0.5 : 1.0), 0);
+                              }, 0).toFixed(1)}D TOT
+                            </div>
                           </div>
                         </td>
                         {weekDays.map((day, dayIdx) => {

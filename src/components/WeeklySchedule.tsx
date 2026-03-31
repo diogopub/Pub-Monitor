@@ -1372,14 +1372,16 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     scheduleState.entries.forEach(entry => {
       // Don't count "Entradas e Entregas" row in the daily allocation summaries
       if (entry.projectId && entry.memberId !== "sr-entradas" && activeCardIds.has(entry.projectId)) {
-        const dur = entry.duration || 1;
-        summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + dur);
+        const { durationSlots } = entryToSlots(entry);
+        // Regra de Diárias: 1-4h (1-4 slots) = 0.5, 5-8h (5-8 slots) = 1.0
+        const diariaValue = durationSlots <= 4 ? 0.5 : 1.0;
+        summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + diariaValue);
       }
     });
     const result: string[] = [];
-    summaries.forEach((dur, pId) => {
+    summaries.forEach((diarias, pId) => {
       const card = activeCards.find(c => c.id === pId);
-      if (card) result.push(`${card.name}: ${dur}`);
+      if (card) result.push(`${card.name}: ${diarias}`);
     });
     return result.sort().join("   |   ");
   }, [scheduleState.entries, cardsState.cards]);
