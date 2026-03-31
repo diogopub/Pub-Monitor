@@ -172,7 +172,13 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
           variant="ghost"
           size="sm"
           className="h-9 px-3 gap-2 text-muted-foreground hover:text-yellow-400 transition-colors"
-          onClick={() => addReminder(window.innerWidth / 2 - 90, window.innerHeight / 2 - 90)}
+          onClick={() => {
+            const container = document.getElementById("main-scroll-container");
+            const scrollTop = container?.scrollTop || 0;
+            const x = window.innerWidth / 2 - 90;
+            const y = (window.innerHeight - 56) / 2 + scrollTop - 90;
+            addReminder(x, y);
+          }}
           title="Novo Post-it"
         >
           <StickyIcon className="w-4 h-4" />

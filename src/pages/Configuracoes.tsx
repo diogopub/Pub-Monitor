@@ -476,7 +476,7 @@ export default function Configuracoes() {
     <div className="relative">
       <div className="h-screen flex flex-col overflow-hidden bg-background">
         <TopBar />
-        <div className="flex-1 overflow-auto">
+        <div id="main-scroll-container" className="flex-1 overflow-auto relative">
           <section className="p-4 sm:p-6">
             <div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-2">
@@ -519,14 +519,14 @@ export default function Configuracoes() {
             <CloudMigrationSection />
             <BackupSettingsSection />
           </div>
+
+          {/* Floating Reminders inside scroll container */}
+          {reminders.map((reminder) => (
+            <StickyNote key={reminder.id} reminder={reminder} />
+          ))}
         </div>
       </div>
       <NewProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} />
-      
-      {/* Floating Reminders */}
-      {reminders.map((reminder) => (
-        <StickyNote key={reminder.id} reminder={reminder} />
-      ))}
     </div>
   );
 }
