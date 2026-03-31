@@ -7,8 +7,6 @@ import SidePanel from "@/components/SidePanel";
 import TopBar from "@/components/TopBar";
 import WorkloadBar from "@/components/WorkloadBar";
 import ScheduleFooter from "@/components/ScheduleFooter";
-import StickyNote from "@/components/StickyNote";
-import { useReminders } from "@/contexts/RemindersContext";
 import { useState } from "react";
 
 const HERO_BG = "https://d2xsxph8kpxj0f.cloudfront.net/310419663028612259/UjaCmpGqyhqDfLGyHgXxbB/pub-hero-bg-PtgN7HuB5WRginXUZ8sr6S.webp";
@@ -23,7 +21,6 @@ export default function Home() {
   const [graphMode, setGraphMode] = useState<"agora" | "designado">("agora");
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   const [hoveredMemberId, setHoveredMemberId] = useState<string | null>(null);
-  const { reminders } = useReminders();
 
   const handleNodeClick = (
     nodeId: string,
@@ -86,9 +83,6 @@ export default function Home() {
             selectedProjectId={selectedNodeType === "project" ? selectedNodeId : null}
             highlightMemberId={hoveredMemberId} 
           />
-          {reminders.map((reminder) => (
-            <StickyNote key={reminder.id} reminder={reminder} />
-          ))}
         </div>
       </div>
     </div>

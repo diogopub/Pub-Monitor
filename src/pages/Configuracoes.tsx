@@ -21,6 +21,8 @@ import { db } from "@/lib/firebase";
 import { useSchedule } from "@/contexts/ScheduleContext";
 import { toast } from "sonner";
 import { runMigration, type MigrationResult } from "@/lib/migration";
+import { useReminders } from "@/contexts/RemindersContext";
+import StickyNote from "@/components/StickyNote";
 import { 
   ShieldCheck, 
   Mail, 
@@ -455,6 +457,7 @@ function BackupSettingsSection() {
 export default function Configuracoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"week" | "fortnight" | "month">("week");
+  const { reminders } = useReminders();
   const { currentUserRole, loading } = usePermissions();
   const [, setLocation] = useLocation();
 
@@ -470,7 +473,7 @@ export default function Configuracoes() {
   }
 
   return (
-    <>
+    <div className="relative">
       <div className="h-screen flex flex-col overflow-hidden bg-background">
         <TopBar />
         <div className="flex-1 overflow-auto">
@@ -519,6 +522,11 @@ export default function Configuracoes() {
         </div>
       </div>
       <NewProjectDialog open={dialogOpen} onOpenChange={setDialogOpen} />
-    </>
+      
+      {/* Floating Reminders */}
+      {reminders.map((reminder) => (
+        <StickyNote key={reminder.id} reminder={reminder} />
+      ))}
+    </div>
   );
 }

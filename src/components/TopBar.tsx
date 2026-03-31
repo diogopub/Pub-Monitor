@@ -166,17 +166,19 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
         </div>
       )}
 
-      {/* Post-it Creator */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-9 px-3 gap-2 text-muted-foreground hover:text-yellow-400 transition-colors"
-        onClick={() => addReminder(window.innerWidth / 2 - 90, window.innerHeight / 2 - 90)}
-        title="Novo Post-it"
-      >
-        <StickyIcon className="w-4 h-4" />
-        <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-wider">Novo Recado</span>
-      </Button>
+      {/* Post-it Creator — only on Configurações */}
+      {location === "/configuracoes" && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 px-3 gap-2 text-muted-foreground hover:text-yellow-400 transition-colors"
+          onClick={() => addReminder(window.innerWidth / 2 - 90, window.innerHeight / 2 - 90)}
+          title="Novo Post-it"
+        >
+          <StickyIcon className="w-4 h-4" />
+          <span className="hidden lg:inline text-[10px] font-bold uppercase tracking-wider">Novo Recado</span>
+        </Button>
+      )}
 
       {/* Filter — only on Painel */}
       {filterRole !== undefined && onFilterChange && (
