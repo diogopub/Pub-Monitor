@@ -7,6 +7,7 @@ import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { isHolidayBR } from "@/lib/utils";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 // ─── Badge definitions ────────────────────────────────────────────
 export interface BadgeDef {
@@ -140,9 +141,32 @@ export const BADGE_DEFS: BadgeDef[] = [
 ];
 
 // ─── Badge Slot ───────────────────────────────────────────────────
-function BadgeSlot({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+function BadgeSlot({ 
+  value, 
+  onChange, 
+  readOnly 
+}: { 
+  value: string | null; 
+  onChange: (id: string | null) => void;
+  readOnly?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const badge = value ? BADGE_DEFS.find((b) => b.id === value) : null;
+
+  if (readOnly) {
+    return (
+      <div
+        className={`w-[44px] h-[44px] rounded flex items-center justify-center border transition-all duration-200
+          ${badge
+            ? "border-white/40 text-white bg-white/10"
+            : "border-dashed border-white/20 text-white/30"
+          }`}
+        title={badge?.label || "Sem símbolo"}
+      >
+        {badge && <span className="w-8 h-8 block">{badge.icon}</span>}
+      </div>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -216,10 +240,12 @@ function TimelineRow({
   card,
   daysArray,
   updateCard,
+  readOnly,
 }: {
   card: any;
   daysArray: Date[];
   updateCard: (id: string, updates: any) => void;
+  readOnly?: boolean;
 }) {
   const badges: (string | null)[] = [
     card.badges?.[0] ?? null,
@@ -257,7 +283,7 @@ function TimelineRow({
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {[0, 1, 2].map((i) => (
-            <BadgeSlot key={i} value={badges[i]} onChange={(val) => setBadge(i, val)} />
+            <BadgeSlot key={i} value={badges[i]} onChange={(val) => setBadge(i, val)} readOnly={readOnly} />
           ))}
         </div>
       </div>
@@ -387,6 +413,8 @@ function TimelineRow({
 // ─── Main component ───────────────────────────────────────────────
 export default function ProjectTimelines() {
   const { state, updateCard } = useProjectCards();
+  const { currentUserRole } = usePermissions();
+  const readOnly = currentUserRole === "viewer";
 
   const activeCards = state.cards
     .filter(
@@ -488,6 +516,7 @@ export default function ProjectTimelines() {
               card={card}
               daysArray={daysArray}
               updateCard={updateCard}
+              readOnly={readOnly}
             />
           ))}
         </div>

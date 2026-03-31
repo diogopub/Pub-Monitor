@@ -10,7 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { isHolidayBR } from "@/lib/utils";
+import { isHolidayBR, cn } from "@/lib/utils";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 const PIN_LABELS = [
   "ENTRADA",
@@ -72,6 +73,8 @@ export default function DailyAllocationPanel({
   onClose,
 }: Props) {
   const { updateCard } = useProjectCards();
+  const { currentUserRole } = usePermissions();
+  const readOnly = currentUserRole === "viewer";
 
   const [draggedPinId, setDraggedPinId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
@@ -243,8 +246,12 @@ export default function DailyAllocationPanel({
                   {/* Drop zone for this day */}
                   <div
                     className="absolute inset-0"
-                    onDragOver={(e) => e.preventDefault()}
-                    onDragEnter={() => handleDragEnter(formatISO(d))}
+                    onDragOver={(e) => { 
+                      if (!readOnly) e.preventDefault(); 
+                    }}
+                    onDragEnter={() => {
+                      if (!readOnly) handleDragEnter(formatISO(d));
+                    }}
                   />
                 </div>
               );
@@ -278,18 +285,20 @@ export default function DailyAllocationPanel({
           )}
 
           {/* Add pin button (left side) */}
-          <div
-            className="absolute left-3 flex items-center"
-            style={{ top: `${TIMELINE_Y - 14}px` }}
-          >
-            <button
-              onClick={handleAddPin}
-              className="p-1.5 rounded bg-white/10 text-white hover:bg-white/20 transition-all hover:scale-110 shadow-lg border border-white/10 active:scale-95"
-              title="Adicionar Pin"
+          {!readOnly && (
+            <div
+              className="absolute left-3 flex items-center"
+              style={{ top: `${TIMELINE_Y - 14}px` }}
             >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
+              <button
+                onClick={handleAddPin}
+                className="p-1.5 rounded bg-white/10 text-white hover:bg-white/20 transition-all hover:scale-110 shadow-lg border border-white/10 active:scale-95"
+                title="Adicionar Pin"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+          )}
 
           {/* Pins Layer */}
           <div className="absolute inset-0 pointer-events-none" style={{ paddingLeft: `${SIDE_PADDING}px` }}>
@@ -312,6 +321,7 @@ export default function DailyAllocationPanel({
                       onRemove={() => handleRemovePin(pin.id)}
                       onDragStart={() => setDraggedPinId(pin.id)}
                       onDragEnd={handleDragEnd}
+                      readOnly={readOnly}
                     />
                   </div>
                 );
@@ -332,6 +342,7 @@ function TimelinePinElement({
   onRemove,
   onDragStart,
   onDragEnd,
+  readOnly,
 }: {
   pin: TimelinePin;
   timelineY: number;
@@ -339,6 +350,7 @@ function TimelinePinElement({
   onRemove: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  readOnly?: boolean;
 }) {
   const pinLabels = pin.labels && pin.labels.length > 0 ? pin.labels : ["ENTRADA"];
 
@@ -405,29 +417,49 @@ function TimelinePinElement({
         style={{ top: `${headTop}px`, left: "50%", transform: "translateX(-50%)" }}
       >
         <button
-          className="w-3 rounded border border-black/50 shadow-[0_0_8px_rgba(0,0,0,0.6)] hover:scale-110 transition-transform"
+          className={cn(
+            "w-3 rounded border border-black/50 shadow-[0_0_8px_rgba(0,0,0,0.6)] transition-transform",
+            !readOnly && "hover:scale-110"
+          )}
           style={{ backgroundColor: colorHex, height: `${PIN_HEAD_H}px` }}
-          onClick={(e) => { e.stopPropagation(); handleToggleColor(); }}
-          title="Mudar cor"
+          onClick={(e) => { 
+            if (!readOnly) {
+              e.stopPropagation(); 
+              handleToggleColor(); 
+            }
+          }}
+          title={readOnly ? undefined : "Mudar cor"}
         />
         {/* Remove whole pin button */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="absolute -top-4 -right-4 bg-destructive text-white p-0.5 rounded-full opacity-0 group-hover/pinhead:opacity-100 transition-opacity z-50"
-        >
-          <X className="w-3 h-3" />
-        </button>
+        {!readOnly && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+            className="absolute -top-4 -right-4 bg-destructive text-white p-0.5 rounded-full opacity-0 group-hover/pinhead:opacity-100 transition-opacity z-50"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
       </div>
 
       {/* Stick — draggable */}
       <div
-        draggable
+        draggable={!readOnly}
         onDragStart={(e) => {
+          if (readOnly) {
+            e.preventDefault();
+            return;
+          }
           e.dataTransfer.setData("pinId", pin.id);
           onDragStart();
         }}
-        onDragEnd={(e) => { e.preventDefault(); onDragEnd(); }}
-        className="absolute cursor-ew-resize -translate-x-1/2"
+        onDragEnd={(e) => { 
+          e.preventDefault(); 
+          if (!readOnly) onDragEnd(); 
+        }}
+        className={cn(
+          "absolute -translate-x-1/2",
+          !readOnly && "cursor-ew-resize"
+        )}
         style={{
           top: `${stickTop}px`,
           left: "50%",
@@ -436,7 +468,7 @@ function TimelinePinElement({
           background: colorHex,
           boxShadow: `0 0 5px ${colorHex}66`,
         }}
-        title="Arraste para mover o pin"
+        title={readOnly ? undefined : "Arraste para mover o pin"}
       />
 
       {/* Labels below timeline line */}
@@ -459,41 +491,48 @@ function TimelinePinElement({
                     autoFocus
                     className="h-6 w-full text-[9.5px] md:text-[9.5px] px-1 py-0 text-center bg-[#11131a]/90 border-white/10 rounded shadow-md text-muted-foreground font-bold font-heading uppercase tracking-wider focus-visible:ring-1 focus-visible:ring-primary/50 focus:text-foreground transition-all leading-tight"
                     value={lab === "OUTROS" ? "" : lab}
-                    onChange={(e) => handleUpdateLabel(index, e.target.value)}
-                    onBlur={() => { if (!lab || lab === "OUTROS") handleUpdateLabel(index, "ENTRADA"); }}
-                    placeholder="Digite..."
+                    onChange={(e) => { if (!readOnly) handleUpdateLabel(index, e.target.value); }}
+                    onBlur={() => { if (!readOnly && (!lab || lab === "OUTROS")) handleUpdateLabel(index, "ENTRADA"); }}
+                    readOnly={readOnly}
+                    placeholder={readOnly ? "" : "Digite..."}
                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   />
-                  <button
-                    onClick={() => handleUpdateLabel(index, "ENTRADA")}
-                    className="absolute -right-5 text-muted-foreground hover:text-white"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative w-full group/labelitem">
-                  <Select value={selectValue} onValueChange={(val) => handleUpdateLabel(index, val)}>
-                    <SelectTrigger className="[&>svg]:hidden w-full h-auto min-h-[24px] py-1 px-1 text-[9.5px] bg-[#11131a]/90 shadow-md border border-white/10 rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading hover:text-white text-muted-foreground flex justify-center uppercase tracking-wider transition-all">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px] z-[99999]">
-                      {PIN_LABELS.map((opt) => (
-                        <SelectItem key={opt} value={opt} className="text-[9.5px] font-semibold">
-                          {opt}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {pinLabels.length > 1 && (
+                  {!readOnly && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleRemoveLabel(index); }}
-                      className="absolute -right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive opacity-0 group-hover/label:opacity-100 transition-opacity"
-                      title="Remover atividade"
+                      onClick={() => handleUpdateLabel(index, "ENTRADA")}
+                      className="absolute -right-5 text-muted-foreground hover:text-white"
                     >
                       <X className="w-3 h-3" />
                     </button>
                   )}
+                </div>
+              ) : (
+                <div className="relative w-full group/labelitem">
+                   <Select 
+                      value={selectValue} 
+                      onValueChange={(val) => { if (!readOnly) handleUpdateLabel(index, val); }}
+                      disabled={readOnly}
+                    >
+                      <SelectTrigger className="[&>svg]:hidden w-full h-auto min-h-[24px] py-1 px-1 text-[9.5px] bg-[#11131a]/90 shadow-md border border-white/10 rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading hover:text-white text-muted-foreground flex justify-center uppercase tracking-wider transition-all disabled:opacity-100 disabled:cursor-default">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[300px] z-[99999]">
+                        {PIN_LABELS.map((opt) => (
+                          <SelectItem key={opt} value={opt} className="text-[9.5px] font-semibold">
+                            {opt}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!readOnly && pinLabels.length > 1 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveLabel(index); }}
+                        className="absolute -right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive opacity-0 group-hover/label:opacity-100 transition-opacity"
+                        title="Remover atividade"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
                 </div>
               )}
             </div>
@@ -501,15 +540,17 @@ function TimelinePinElement({
         })}
 
         {/* Add stacked label */}
-        <div className="flex justify-center">
-          <button
-            onClick={(e) => { e.stopPropagation(); handleAddLabel(); }}
-            className="bg-white/10 hover:bg-white/20 text-white rounded p-0.5 opacity-0 group-hover/pin:opacity-100 transition-opacity mt-0.5"
-            title="Adicionar atividade"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex justify-center">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleAddLabel(); }}
+              className="bg-white/10 hover:bg-white/20 text-white rounded p-0.5 opacity-0 group-hover/pin:opacity-100 transition-opacity mt-0.5"
+              title="Adicionar atividade"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

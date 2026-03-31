@@ -7,6 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, ChevronRight, Activity, CalendarDays } from "lucide-react";
 import { useMemo } from "react";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { cn } from "@/lib/utils";
 
 interface SidePanelProps {
   collapsed: boolean;
@@ -41,6 +43,8 @@ export default function SidePanel({
   onToggle,
 }: SidePanelProps) {
   const { state: cardsState, updateCard } = useProjectCards();
+  const { currentUserRole } = usePermissions();
+  const readOnly = currentUserRole === "viewer";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -82,6 +86,7 @@ export default function SidePanel({
   const sortedDates = Object.keys(groupedPins).sort((a, b) => a.localeCompare(b));
 
   const handleToggleLabel = (cardId: string, pinId: string, labelIndex: number, currentStatus: boolean) => {
+    if (readOnly) return;
     const card = cardsState.cards.find((c) => c.id === cardId);
     if (!card || !card.timelinePins) return;
 
@@ -183,21 +188,24 @@ export default function SidePanel({
 
                                     return (
                                       <div key={uid} className="flex items-start gap-2 group">
-                                        <Checkbox
-                                          id={uid}
-                                          checked={isCompleted}
-                                          onCheckedChange={() =>
-                                            handleToggleLabel(cardId, pin.id, idx, isCompleted)
-                                          }
-                                          className="mt-0.5 w-[14px] h-[14px] rounded-[3px] border-muted-foreground/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all"
-                                        />
+                                          <Checkbox
+                                            id={uid}
+                                            checked={isCompleted}
+                                            onCheckedChange={() =>
+                                              handleToggleLabel(cardId, pin.id, idx, isCompleted)
+                                            }
+                                            disabled={readOnly}
+                                            className="mt-0.5 w-[14px] h-[14px] rounded-[3px] border-muted-foreground/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all disabled:opacity-50 disabled:cursor-default"
+                                          />
                                         <label
                                           htmlFor={uid}
-                                          className={`text-[11px] font-medium leading-tight ${
+                                          className={cn(
+                                            "text-[11px] font-medium leading-tight select-none",
                                             isCompleted
                                               ? "text-muted-foreground line-through opacity-50"
-                                              : "text-foreground group-hover:text-primary transition-colors hover:cursor-pointer"
-                                          } select-none`}
+                                              : "text-foreground group-hover:text-primary transition-colors",
+                                            !readOnly && "hover:cursor-pointer"
+                                          )}
                                           title={displayLabel}
                                         >
                                           {displayLabel}

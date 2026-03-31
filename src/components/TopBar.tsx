@@ -167,7 +167,7 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
       )}
 
       {/* Post-it Creator — only on Configurações */}
-      {location === "/configuracoes" && (
+      {location === "/configuracoes" && (currentUserRole === "admin" || currentUserRole === "editor") && (
         <Button
           variant="ghost"
           size="sm"
@@ -231,10 +231,12 @@ export default function TopBar({ filterRole, onFilterChange, graphMode, onGraphM
             <Download className="w-3 h-3 mr-2" />
             Exportar JSON
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleImport}>
-            <Upload className="w-3 h-3 mr-2" />
-            Importar JSON
-          </DropdownMenuItem>
+          {(currentUserRole === "admin" || currentUserRole === "editor") && (
+            <DropdownMenuItem onClick={handleImport}>
+              <Upload className="w-3 h-3 mr-2" />
+              Importar JSON
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
