@@ -34,7 +34,7 @@ export type DailyAllocations = Record<string, string[]>;
 export interface TimelinePin {
   id: string;
   date: string;
-  color: "white" | "yellow" | "red";
+  color: "white" | "green" | "yellow" | "red";
   label?: string;
   labels: string[];
   completedLabels?: boolean[];

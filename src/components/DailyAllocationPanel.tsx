@@ -374,13 +374,24 @@ function TimelinePinElement({
 
   const handleToggleColor = () => {
     let next: TimelinePin["color"] = "white";
-    if (pin.color === "white") next = "yellow";
-    if (pin.color === "yellow") next = "red";
+    if (pin.color === "white") next = "green";
+    else if (pin.color === "green") next = "yellow";
+    else if (pin.color === "yellow") next = "red";
     onUpdate({ color: next });
   };
 
+  const getHoverLabel = (color: string) => {
+    if (color === "green") return "Feito";
+    if (color === "yellow") return "Entrega Alteração";
+    if (color === "red") return "Entrega Final";
+    return null;
+  };
+  const hoverLabel = getHoverLabel(pin.color);
+
   const colorHex =
-    pin.color === "white" ? "#fff" : pin.color === "yellow" ? "#facc15" : "#ef4444";
+    pin.color === "white" ? "#fff" : 
+    pin.color === "green" ? "#22c55e" : 
+    pin.color === "yellow" ? "#facc15" : "#ef4444";
 
   const PIN_HEAD_H = 20; // px height of pin head rectangle
   const PIN_STICK_H = 16; // px height of stick below head
@@ -420,7 +431,7 @@ function TimelinePinElement({
         <button
           className={cn(
             "w-3 rounded border border-black/50 shadow-[0_0_8px_rgba(0,0,0,0.6)] transition-transform",
-            !readOnly && "hover:scale-110"
+            !readOnly && "hover:scale-110 relative"
           )}
           style={{ backgroundColor: colorHex, height: `${PIN_HEAD_H}px` }}
           onClick={(e) => { 
@@ -429,8 +440,15 @@ function TimelinePinElement({
               handleToggleColor(); 
             }
           }}
-          title={readOnly ? undefined : "Mudar cor"}
-        />
+          title={readOnly ? hoverLabel || undefined : undefined}
+        >
+          {/* Hover Label */}
+          {hoverLabel && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-black/90 text-[9px] text-white rounded font-bold uppercase tracking-wider shadow-lg opacity-0 group-hover/pinhead:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-[100]">
+              {hoverLabel}
+            </div>
+          )}
+        </button>
         {/* Remove whole pin button */}
         {!readOnly && (
           <button
