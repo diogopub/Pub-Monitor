@@ -1379,10 +1379,12 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
   // Active projects allocations summary
   const activeProjectSummaries = useMemo(() => {
-    const summaries = new Map<string, number>();
     const activeCards = cardsState.cards.filter(c => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO");
     const activeCardIds = new Set(activeCards.map(c => c.id));
     
+    // Agrupar turnos por projeto, membro e data
+    const projectMemberDaySlots = new Map<string, number>();
+
     scheduleState.entries.forEach(entry => {
       // Regras:
       // 1. Deve ser um projeto válido (não PUB INTERNO e deve estar ativo no card)
@@ -1399,10 +1401,19 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
         activeCardIds.has(entry.projectId)
       ) {
         const { durationSlots } = entryToSlots(entry);
-        // Regra de Diárias: 1-4h (1-4 slots) = 0.5, 5-8h (5-8 slots) = 1.0
-        const diariaValue = durationSlots <= 4 ? 0.5 : 1.0;
-        summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + diariaValue);
+        // Agrupar a carga diária de um membro num mesmo projeto neste dia
+        const key = `${entry.projectId}_${entry.memberId}_${entry.date}`;
+        projectMemberDaySlots.set(key, (projectMemberDaySlots.get(key) || 0) + durationSlots);
       }
+    });
+
+    // Calcular as diárias totais de cada projeto
+    const summaries = new Map<string, number>();
+    projectMemberDaySlots.forEach((slots, key) => {
+      const projectId = key.split('_')[0];
+      // Regra de Diárias por dia: <= 4 slots = 0.5, > 4 slots = 1.0
+      const diariaValue = slots <= 4 ? 0.5 : 1.0;
+      summaries.set(projectId, (summaries.get(projectId) || 0) + diariaValue);
     });
 
     const result: string[] = [];
