@@ -14,6 +14,8 @@ import { useNetwork } from "@/contexts/NetworkContext";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import {
   Popover,
   PopoverContent,
@@ -254,6 +256,8 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
   const [entryDate, setEntryDate] = useState(card.entryDate);
   const [deliveryDate, setDeliveryDate] = useState(card.deliveryDate);
   const [showDiarias, setShowDiarias] = useState(false);
+  const { currentUserRole } = usePermissions();
+  const readOnly = currentUserRole === "viewer";
 
   const progress = calcProgress(card.entryDate, card.deliveryDate);
   const daysToEntry = calcDaysFromNow(card.entryDate);
@@ -296,15 +300,19 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
+              if (readOnly) return;
               const current: ProjectStatus = card.projectStatus || "em-desenvolvimento";
               updateCard(card.id, { projectStatus: STATUS_CONFIG[current].next });
             }}
-            className="w-3 h-3 rounded-full shrink-0 transition-all hover:scale-125 shadow-md ring-2 ring-offset-2 ring-offset-card"
+            className={cn(
+              "w-3 h-3 rounded-full shrink-0 transition-all shadow-md ring-2 ring-offset-2 ring-offset-card",
+              !readOnly && "hover:scale-125 cursor-pointer"
+            )}
             style={{
               backgroundColor: STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color,
               boxShadow: `0 0 0 2px ${STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color}55`,
             }}
-            title="Clique para mudar o status"
+            title={readOnly ? undefined : "Clique para mudar o status"}
           />
           <span className="text-[10px] font-bold tracking-wide" style={{ color: STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color }}>
             {STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].label}
@@ -334,12 +342,14 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   <h3 className="text-xs font-bold font-heading uppercase tracking-wide text-foreground">
                     {card.name}
                   </h3>
-                  <button 
-                    onClick={() => setIsEditingName(true)}
-                    className="opacity-0 group-hover/name:opacity-100 transition-opacity p-0.5 hover:bg-accent/50 rounded"
-                  >
-                    <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
-                  </button>
+                  {!readOnly && (
+                    <button 
+                      onClick={() => setIsEditingName(true)}
+                      className="opacity-0 group-hover/name:opacity-100 transition-opacity p-0.5 hover:bg-accent/50 rounded"
+                    >
+                      <Pencil className="w-2.5 h-2.5 text-muted-foreground" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -347,6 +357,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               <Switch
                 checked={card.active !== false}
                 onCheckedChange={(checked) => updateCard(card.id, { active: checked })}
+                disabled={readOnly}
                 className={`scale-75 origin-left ${
                   card.active !== false
                     ? "data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
@@ -363,21 +374,23 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
           </div>
           <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
             <span>{card.client}</span>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="p-0.5 hover:bg-accent/50 rounded">
-                  <Trash2 className="w-3 h-3 text-destructive/60 hover:text-destructive" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-3" side="top">
-                <p className="text-xs mb-2">Remover este projeto?</p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="destructive" className="text-xs flex-1" onClick={() => removeCard(card.id)}>
-                    Remover
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            {!readOnly && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="p-0.5 hover:bg-accent/50 rounded">
+                    <Trash2 className="w-3 h-3 text-destructive/60 hover:text-destructive" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-3" side="top">
+                  <p className="text-xs mb-2">Remover este projeto?</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="destructive" className="text-xs flex-1" onClick={() => removeCard(card.id)}>
+                      Remover
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
         </div>
       </div>
@@ -399,8 +412,8 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 />
               ) : (
                 <button
-                  onClick={() => setEditingDates("entry")}
-                  className={`px-1.5 py-0.5 rounded font-mono transition-colors cursor-pointer ${card.entryDate ? 'bg-secondary/50 text-foreground hover:bg-secondary/80' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}`}
+                  onClick={() => !readOnly && setEditingDates("entry")}
+                  className={`px-1.5 py-0.5 rounded font-mono transition-colors ${readOnly ? "" : "cursor-pointer"} ${card.entryDate ? 'bg-secondary/50 text-foreground hover:bg-secondary/80' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}`}
                 >
                   {formatDateBR(card.entryDate) || "Adicionar"}
                 </button>
@@ -422,8 +435,8 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 />
               ) : (
                 <button
-                  onClick={() => setEditingDates("delivery")}
-                  className={`px-1.5 py-0.5 rounded font-mono transition-colors cursor-pointer ${card.deliveryDate ? 'bg-secondary/50 text-foreground hover:bg-secondary/80' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}`}
+                  onClick={() => !readOnly && setEditingDates("delivery")}
+                  className={`px-1.5 py-0.5 rounded font-mono transition-colors ${readOnly ? "" : "cursor-pointer"} ${card.deliveryDate ? 'bg-secondary/50 text-foreground hover:bg-secondary/80' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}`}
                 >
                   {formatDateBR(card.deliveryDate) || "Adicionar"}
                 </button>
@@ -434,6 +447,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 <Switch
                   checked={card.showInTimeline !== false}
                   onCheckedChange={(checked) => updateCard(card.id, { showInTimeline: checked })}
+                  disabled={readOnly}
                   className="scale-[0.55] origin-center data-[state=checked]:bg-primary/60"
                 />
                 <span className="text-[7px] font-bold uppercase tracking-tight text-muted-foreground/50">Timeline</span>
@@ -473,16 +487,18 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
           <span className="text-[10px] font-bold font-heading uppercase tracking-wider text-foreground">
             EQUIPE
           </span>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="text-muted-foreground hover:text-foreground">
-                <Plus className="w-3 h-3" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-48 p-2" side="top">
-              <AddTeamMemberForm cardId={card.id} />
-            </PopoverContent>
-          </Popover>
+          {!readOnly && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-muted-foreground hover:text-foreground">
+                  <Plus className="w-3 h-3" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" side="top">
+                <AddTeamMemberForm cardId={card.id} />
+              </PopoverContent>
+            </Popover>
+          )}
         </div>
         <div className="space-y-1.5">
           {(card.team || []).map((member) => (
@@ -526,18 +542,20 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               <p className="text-[10px] text-muted-foreground leading-tight flex-1">
                 {allFeed[currentFeedIndex]?.message}
               </p>
-              <button
-                onClick={() => {
-                  const entry = allFeed[currentFeedIndex];
-                  if (entry) {
-                    removeFeedEntry(card.id, entry.id);
-                    setFeedIndex(Math.max(0, currentFeedIndex - 1));
-                  }
-                }}
-                className="opacity-0 group-hover/feed:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
-              >
-                <X className="w-3 h-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => {
+                    const entry = allFeed[currentFeedIndex];
+                    if (entry) {
+                      removeFeedEntry(card.id, entry.id);
+                      setFeedIndex(Math.max(0, currentFeedIndex - 1));
+                    }
+                  }}
+                  className="opacity-0 group-hover/feed:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0 mt-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-[10px] text-muted-foreground italic">
@@ -571,15 +589,18 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               <span className={`text-[10px] font-semibold flex-1 ${doc.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
                 {doc.label}
               </span>
-              <button
-                onClick={() => removeDocument(card.id, doc.id)}
-                className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => removeDocument(card.id, doc.id)}
+                  className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
               <Switch
                 checked={doc.enabled}
                 onCheckedChange={() => toggleDocument(card.id, doc.id)}
+                disabled={readOnly}
                 className="scale-75 data-[state=unchecked]:!bg-red-600 data-[state=unchecked]:!border-red-600 data-[state=checked]:!bg-green-600 data-[state=checked]:!border-green-600 [&_[data-slot=switch-thumb]]:!bg-white"
               />
             </div>
@@ -587,33 +608,35 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
         </div>
 
         {/* Add document */}
-        <div className="flex items-center gap-1 mt-2">
-          <Input
-            placeholder="Novo documento"
-            value={newDocLabel}
-            onChange={(e) => setNewDocLabel(e.target.value)}
-            className="h-6 text-[10px] flex-1"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newDocLabel.trim()) {
-                addDocument(card.id, newDocLabel.trim().toUpperCase());
-                setNewDocLabel("");
-              }
-            }}
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="h-6 w-6"
-            onClick={() => {
-              if (newDocLabel.trim()) {
-                addDocument(card.id, newDocLabel.trim().toUpperCase());
-                setNewDocLabel("");
-              }
-            }}
-          >
-            <Plus className="w-3 h-3" />
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-1 mt-2">
+            <Input
+              placeholder="Novo documento"
+              value={newDocLabel}
+              onChange={(e) => setNewDocLabel(e.target.value)}
+              className="h-6 text-[10px] flex-1"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newDocLabel.trim()) {
+                  addDocument(card.id, newDocLabel.trim().toUpperCase());
+                  setNewDocLabel("");
+                }
+              }}
+            />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-6 w-6"
+              onClick={() => {
+                if (newDocLabel.trim()) {
+                  addDocument(card.id, newDocLabel.trim().toUpperCase());
+                  setNewDocLabel("");
+                }
+              }}
+            >
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

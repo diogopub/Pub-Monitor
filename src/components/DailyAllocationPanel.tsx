@@ -100,6 +100,7 @@ export default function DailyAllocationPanel({
 
   // Pin handlers
   const handleAddPin = () => {
+    if (readOnly) return;
     // Add to the first day of the current view (next to the + button)
     const dateToUse = formatISO(daysArray[0]);
     const newPin: TimelinePin = {
