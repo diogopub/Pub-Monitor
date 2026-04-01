@@ -1364,28 +1364,6 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
 
-  // Active projects allocations summary
-  const activeProjectSummaries = useMemo(() => {
-    const summaries = new Map<string, number>();
-    const activeCards = cardsState.cards.filter(c => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO");
-    const activeCardIds = new Set(activeCards.map(c => c.id));
-    scheduleState.entries.forEach(entry => {
-      // Don't count "Entradas e Entregas" row in the daily allocation summaries
-      if (entry.projectId && entry.memberId !== "sr-entradas" && activeCardIds.has(entry.projectId)) {
-        const { durationSlots } = entryToSlots(entry);
-        // Regra de Diárias: 1-4h (1-4 slots) = 0.5, 5-8h (5-8 slots) = 1.0
-        const diariaValue = durationSlots <= 4 ? 0.5 : 1.0;
-        summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + diariaValue);
-      }
-    });
-    const result: string[] = [];
-    summaries.forEach((diarias, pId) => {
-      const card = activeCards.find(c => c.id === pId);
-      if (card) result.push(`${card.name}: ${diarias}`);
-    });
-    return result.sort().join("   |   ");
-  }, [scheduleState.entries, cardsState.cards]);
-
   const weekDays = useMemo(() => {
     if (viewMode === "month") {
       const y = currentMonday.getFullYear();
@@ -1398,6 +1376,43 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     }
     return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
   }, [currentMonday, viewMode]);
+
+  // Active projects allocations summary
+  const activeProjectSummaries = useMemo(() => {
+    const summaries = new Map<string, number>();
+    const activeCards = cardsState.cards.filter(c => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO");
+    const activeCardIds = new Set(activeCards.map(c => c.id));
+    
+    scheduleState.entries.forEach(entry => {
+      // Regras:
+      // 1. Deve ser um projeto válido (não PUB INTERNO e deve estar ativo no card)
+      // 2. Não contamos a linha "Entradas e Entregas" no resumo diário
+      // 3. Ignoramos a contagem para o usuário Vinícius
+      // 4. A contagem é ABSOLUTA (não importa a data da tarefa)
+      const member = networkState.members.find(m => m.id === entry.memberId);
+      const isVinicius = member?.name?.trim().toUpperCase() === "VINÍCIUS";
+
+      if (
+        entry.projectId && 
+        entry.memberId !== "sr-entradas" && 
+        !isVinicius &&
+        activeCardIds.has(entry.projectId)
+      ) {
+        const { durationSlots } = entryToSlots(entry);
+        // Regra de Diárias: 1-4h (1-4 slots) = 0.5, 5-8h (5-8 slots) = 1.0
+        const diariaValue = durationSlots <= 4 ? 0.5 : 1.0;
+        summaries.set(entry.projectId, (summaries.get(entry.projectId) || 0) + diariaValue);
+      }
+    });
+
+    const result: string[] = [];
+    summaries.forEach((diarias, pId) => {
+      const card = activeCards.find(c => c.id === pId);
+      if (card) result.push(`${card.name}: ${diarias}`);
+    });
+
+    return result.sort().join("   |   ");
+  }, [scheduleState.entries, cardsState.cards, networkState.members]);
 
   const goToPrevPeriod = () => setCurrentMonday((m) => addDays(m, -7));
   const goToNextPeriod = () => setCurrentMonday((m) => addDays(m, 7));
