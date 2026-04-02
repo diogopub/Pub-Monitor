@@ -304,7 +304,15 @@ function TimelineRow({
                 className={`flex-1 border-l border-white/5 relative
                   ${isOffDay ? "bg-white/[0.02]" : ""}
                   ${isToday ? "bg-primary/5" : ""}`}
-              />
+              >
+                {/* Day header */}
+                <div className={`absolute top-2 w-full text-center text-[9px] font-mono select-none pointer-events-none leading-tight
+                  ${isToday ? "text-primary font-bold" : "text-white/25"}`}>
+                  <div>{DAYS[dow]}</div>
+                  <div>{d.getDate()}</div>
+                  {isToday && <div className="w-1 h-1 bg-primary rounded-full mx-auto mt-0.5" />}
+                </div>
+              </div>
             );
           })}
           <div className="border-l border-white/5" />
@@ -437,68 +445,54 @@ export default function ProjectTimelines() {
         className="rounded-lg overflow-hidden border border-white/10"
         style={{ background: "#11131a" }}
       >
-        {/* Header with navigation - Sticky */}
-        <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-[#11131a]/95 backdrop-blur-md">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary/80" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-          <h2 className="text-sm font-bold font-heading tracking-wide text-white/90 flex-1">Timelines dos Projetos</h2>
-
-          {/* Navigation */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setBaseDate((d) => addDays(d, -7))}
-              className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Semana anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-[11px] text-white/50 font-mono min-w-[110px] text-center select-none">
-              {formatDateShort(daysArray[0])} – {formatDateShort(daysArray[daysArray.length - 1])}
-            </span>
-            <button
-              onClick={() => setBaseDate((d) => addDays(d, 7))}
-              className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-              title="Próxima semana"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* Header with navigation - FIXED position */}
+        <div 
+          className="fixed left-0 right-0 z-[100] px-10 py-3 bg-[#11131a]/95 backdrop-blur-md border-b border-white/10 flex items-center gap-6"
+          style={{ 
+            top: "64px", // Matches TopBar height
+          }}
+        >
+          <div className="flex items-center gap-2 flex-1">
+            <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary/80" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+            <h2 className="text-sm font-bold font-heading tracking-wide text-white/90">Timelines dos Projetos</h2>
           </div>
 
-          <button
-            onClick={goToToday}
-            className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-white transition-colors font-semibold uppercase tracking-wider"
-          >
-            Hoje
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Navigation */}
+            <div className="flex items-center gap-1 bg-black/20 rounded-lg p-1 border border-white/5">
+              <button
+                onClick={() => setBaseDate((d) => addDays(d, -7))}
+                className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                title="Semana anterior"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-[11px] text-white/70 font-mono min-w-[120px] text-center select-none font-bold">
+                {formatDateShort(daysArray[0])} – {formatDateShort(daysArray[daysArray.length - 1])}
+              </span>
+              <button
+                onClick={() => setBaseDate((d) => addDays(d, 7))}
+                className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+                title="Próxima semana"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              onClick={goToToday}
+              className="text-[10px] bg-primary/20 hover:bg-primary/30 border border-primary/20 px-3 py-1.5 rounded text-primary transition-colors font-bold uppercase tracking-wider h-8"
+            >
+              Hoje
+            </button>
+          </div>
         </div>
 
-        {/* Column header row (shared day labels above all project rows) - Also Sticky */}
-        <div className="sticky top-[45px] z-40 flex border-b border-white/10 bg-[#11131a]/90 backdrop-blur-sm">
-          {/* Label column spacer */}
-          <div className="shrink-0 bg-[#11131a]/60 border-r border-white/10" style={{ width: `${LABEL_W}px` }} />
-          {/* Day headers */}
-          {daysArray.map((d) => {
-            const dow = d.getDay();
-            const isWknd = dow === 0 || dow === 6;
-            const isHoliday = isHolidayBR(d);
-            const isOffDay = isWknd || isHoliday;
-            const isToday = formatISO(d) === todayStr;
-            return (
-              <div
-                key={d.toISOString()}
-                className={`flex-1 text-center py-1.5 border-l border-white/5 text-[9px] font-mono select-none
-                  ${isOffDay ? "bg-white/[0.02]" : ""}
-                  ${isToday ? "text-primary font-bold" : "text-white/30"}`}
-              >
-                <div className="uppercase">{DAYS[dow]}</div>
-                <div>{d.getDate()}</div>
-                {isToday && <div className="w-1 h-1 bg-primary rounded-full mx-auto mt-0.5" />}
-              </div>
-            );
-          })}
-          <div className="border-l border-white/5 w-0" />
-        </div>
+        {/* Spacer for the fixed header */}
+        <div className="h-[56px]" />
+
 
 
         {/* Project rows */}
