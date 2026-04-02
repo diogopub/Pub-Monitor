@@ -16,11 +16,6 @@ import { usePermissions, UserRole } from "@/contexts/PermissionsContext";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { doc, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { useSchedule } from "@/contexts/ScheduleContext";
-import { toast } from "sonner";
-import { runMigration, type MigrationResult } from "@/lib/migration";
 import { useReminders } from "@/contexts/RemindersContext";
 import StickyNote from "@/components/StickyNote";
 import { 
@@ -28,16 +23,15 @@ import {
   Mail, 
   UserPlus, 
   Trash2, 
-  DatabaseZap,
   FolderKanban,
   Plus,
   Cloud,
   CalendarDays,
   Check,
   UserX,
-  ArrowUpFromLine,
   Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 function ProjectCardsSection({ onOpenDialog }: { onOpenDialog: () => void }) {
   const { state } = useProjectCards();
@@ -122,73 +116,6 @@ function ProjectCardsSection({ onOpenDialog }: { onOpenDialog: () => void }) {
           ))}
         </div>
       )}
-    </section>
-  );
-}
-
-function CloudMigrationSection() {
-  const { currentUserRole } = usePermissions();
-  const [status, setStatus] = useState<"idle" | "running" | "done" | "error" | "already-migrated">("idle");
-  const [result, setResult] = useState<MigrationResult | null>(null);
-
-  if (currentUserRole !== "admin") return null;
-
-  const handleMigrate = async () => {
-    if (!confirm("Isto vai migrar os dados para o novo formato de subcoleções. Seguro de rodar várias vezes. Continuar?")) return;
-    setStatus("running");
-    setResult(null);
-    const res = await runMigration();
-    setStatus(res.status);
-    setResult(res);
-    if (res.status === "done") toast.success("Migração concluída!");
-    else if (res.status === "already-migrated") toast.info(res.message);
-    else if (res.status === "error") toast.error(res.message);
-  };
-
-  return (
-    <section className="w-full">
-      <div className="flex items-center gap-2 mb-6">
-        <DatabaseZap className="w-5 h-5 text-amber-500" />
-        <h2 className="text-lg font-bold font-heading tracking-wide">
-          Migração de Dados
-        </h2>
-      </div>
-
-      <div className="w-full bg-amber-500/5 border border-amber-500/20 rounded-xl p-6 space-y-4">
-        <p className="text-xs text-muted-foreground">
-          Migra dados para o formato de <strong>subcoleções</strong>, permitindo edição simultânea por múltiplos editores sem conflitos. Seguro de rodar múltiplas vezes.
-        </p>
-
-        <Button
-          onClick={handleMigrate}
-          disabled={status === "running"}
-          className="gap-2 w-full"
-          variant={status === "done" ? "outline" : "default"}
-        >
-          {status === "running" ? (
-            <><Loader2 className="w-4 h-4 animate-spin" />Migrando...</>
-          ) : status === "done" ? (
-            <><Check className="w-4 h-4 text-green-500" />Migração Concluída</>
-          ) : (
-            <><DatabaseZap className="w-4 h-4" />Executar Migração</>
-          )}
-        </Button>
-
-        {result && (
-          <div className={`rounded-lg p-3 text-xs ${
-            result.status === "done" ? "bg-green-500/10 text-green-400 border border-green-500/20" :
-            result.status === "already-migrated" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
-            "bg-red-500/10 text-red-400 border border-red-500/20"
-          }`}>
-            <p>{result.message}</p>
-            {result.stats && (
-              <p className="mt-1 opacity-70">
-                {result.stats.cardsMigrated} cards · {result.stats.entriesMigrated} entradas migradas
-              </p>
-            )}
-          </div>
-        )}
-      </div>
     </section>
   );
 }
@@ -516,7 +443,6 @@ export default function Configuracoes() {
           <ProjectCardsSection onOpenDialog={() => setDialogOpen(true)} />
           <PermissionsSettingsSection />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 sm:p-6 pt-0 border-t border-border mt-8">
-            <CloudMigrationSection />
             <BackupSettingsSection />
           </div>
 
