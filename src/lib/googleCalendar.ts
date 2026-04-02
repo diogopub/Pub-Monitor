@@ -88,8 +88,11 @@ export async function pushEventToGoogleCalendar(
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
           const msg = body.error?.message || res.statusText;
-          if (res.status === 401 || res.status === 403) {
-            throw new Error(`AuthError: ${res.status}`);
+          if (res.status === 401) {
+            throw new Error(`AuthError: 401`);
+          }
+          if (res.status === 403) {
+            return { ids: eventIds, error: `403 Forbidden: Sem permissão no calendário destino.` };
           }
           return { ids: eventIds, error: `${res.status}: ${msg}` };
         }
@@ -127,8 +130,11 @@ async function deleteSingleEvent(id: string, calendarId: string, token: string):
         }
       );
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          throw new Error(`AuthError: ${res.status}`);
+        if (res.status === 401) {
+          throw new Error(`AuthError: 401`);
+        }
+        if (res.status === 403) {
+          throw new Error(`403 Forbidden: Sem permissão no calendário destino.`);
         }
         if (!isIgnorableDeleteError(res.status)) {
            throw new Error(`Delete failed with status ${res.status}`);
@@ -181,7 +187,8 @@ export async function purgeMonitorEventsInRange(
       const res = await fetch(url, { headers: { "Authorization": `Bearer ${token}` } });
       
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) throw new Error(`AuthError: ${res.status}`);
+        if (res.status === 401) throw new Error(`AuthError: 401`);
+        if (res.status === 403) throw new Error(`403 Forbidden: Sem permissão no calendário destino.`);
         break; // Ignora pacotes de erro silenciosamente se não for Auth (fallback)
       }
 
