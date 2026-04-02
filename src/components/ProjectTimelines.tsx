@@ -411,6 +411,7 @@ function TimelineRow({
 }
 
 // ─── Main component ───────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────
 export default function ProjectTimelines() {
   const { state, updateCard } = useProjectCards();
   const { currentUserRole } = usePermissions();
@@ -433,39 +434,76 @@ export default function ProjectTimelines() {
   }, [baseDate]);
 
   const goToToday = () => setBaseDate(addDays(new Date(), -3));
-  const todayStr = formatISO(new Date());
+
+  // ─── Drag Logic ────────────────────────────────────────────────
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Only drag if clicking the timeline area, not a button/popover
+    if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".popover-content")) return;
+    
+    setIsDragging(true);
+    setStartX(e.pageX);
+    document.body.style.cursor = "grabbing";
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    
+    const x = e.pageX;
+    const walk = startX - x;
+    
+    // Sensitivity: how many pixels mouse moves to shift one day
+    const threshold = 60; 
+    
+    if (Math.abs(walk) > threshold) {
+      const daysToShift = Math.floor(walk / threshold);
+      if (daysToShift !== 0) {
+        setBaseDate(prev => addDays(prev, daysToShift));
+        setStartX(x); // Reset start point to last handle
+      }
+    }
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+    document.body.style.cursor = "default";
+  };
 
   if (activeCards.length === 0) return null;
 
-  const DAYS = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
-
   return (
-    <section className="px-4 sm:px-6 pb-0 mt-6">
+    <section className="px-4 sm:px-6 pb-12 mt-8">
       <div
-        className="rounded-lg overflow-hidden border border-white/10"
+        className="rounded-lg overflow-hidden border border-white/10 select-none cursor-grab active:cursor-grabbing"
         style={{ background: "#11131a" }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
       >
-        {/* Header with navigation - Standard Block */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-black/30">
+        {/* Header with navigation */}
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-black/40">
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary/80" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
           </svg>
-          <h2 className="text-sm font-bold font-heading tracking-wide text-white/90 flex-1">Timelines dos Projetos</h2>
+          <h2 className="text-[12px] font-bold font-heading tracking-wide text-white/90 flex-1 uppercase">Timelines dos Projetos</h2>
 
           {/* Navigation */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 bg-black/20 rounded-md p-0.5 border border-white/5">
             <button
-              onClick={() => setBaseDate((d) => addDays(d, -7))}
+              onClick={(e) => { e.stopPropagation(); setBaseDate((d) => addDays(d, -7)); }}
               className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Semana anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-[11px] text-white/50 font-mono min-w-[110px] text-center select-none font-bold">
+            <span className="text-[10px] text-white/60 font-mono min-w-[110px] text-center font-bold">
               {formatDateShort(daysArray[0])} – {formatDateShort(daysArray[daysArray.length - 1])}
             </span>
             <button
-              onClick={() => setBaseDate((d) => addDays(d, 7))}
+              onClick={(e) => { e.stopPropagation(); setBaseDate((d) => addDays(d, 7)); }}
               className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Próxima semana"
             >
@@ -474,17 +512,15 @@ export default function ProjectTimelines() {
           </div>
 
           <button
-            onClick={goToToday}
-            className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-white transition-colors font-semibold uppercase tracking-wider"
+            onClick={(e) => { e.stopPropagation(); goToToday(); }}
+            className="text-[10px] bg-primary/20 hover:bg-primary/30 border border-primary/20 px-3 py-1 rounded text-primary transition-colors font-bold uppercase tracking-wider"
           >
             Hoje
           </button>
         </div>
 
-
-
         {/* Project rows */}
-        <div>
+        <div className="divide-y divide-white/5">
           {activeCards.map((card) => (
             <TimelineRow
               key={card.id}
