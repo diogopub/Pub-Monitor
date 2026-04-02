@@ -13,30 +13,43 @@ export function useAutoBackup() {
   const performBackup = useCallback(async (slot: string) => {
     if (!googleAppsScriptUrl) return;
 
+    // Use a unique key for today's backup for this slot
+    const today = new Date().toLocaleDateString();
+    const backupKey = `last_backup_${slot}`;
+    const lastBackupDate = localStorage.getItem(backupKey);
+
+    // Guard: already backed up today for this slot
+    if (lastBackupDate === today) return;
+
+    // Prevent duplicate triggers in the same minute by marking immediately
+    localStorage.setItem(backupKey, today);
+
+    console.log(`[AutoBackup] Starting backup for slot ${slot}...`);
+
     const fullData = {
       network: networkState,
       schedule: scheduleState,
       cards: cardsState,
+      timestamp: new Date().toISOString(),
+      slot: slot
     };
 
     try {
-      const response = await fetch(googleAppsScriptUrl, {
+      await fetch(googleAppsScriptUrl, {
         method: "POST",
-        mode: "no-cors", // Apps Script web apps often require no-cors for simple POST
+        mode: "no-cors",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(fullData),
       });
 
-      // Note: with no-cors, we can't actually see the response status
-      // but the request is sent.
-      const today = new Date().toLocaleDateString();
-      localStorage.setItem(`last_backup_${slot}`, today);
       console.log(`[AutoBackup] Backup sent for slot ${slot}`);
       toast.info(`Backup automático (${slot}) enviado para o Google Drive`);
     } catch (error) {
-      console.error("[AutoBackup] Error:", error);
+      console.error("[AutoBackup] Error during backup:", error);
+      // Optional: clear on error if we want to retry within the same minute? 
+      // Better to stay safe and wait for next trigger or manual.
     }
   }, [networkState, scheduleState, cardsState, googleAppsScriptUrl]);
 
@@ -47,27 +60,22 @@ export function useAutoBackup() {
       const now = new Date();
       const hours = now.getHours();
       const minutes = now.getMinutes();
-      const today = new Date().toLocaleDateString();
 
-      // Slots: 12:00 and 20:00
-      // We check if it's the right hour/minute and if we haven't backed up today for this slot
+      // Updated Slots: 12:00 and 18:00
       const slots = [
         { hour: 12, min: 0, label: "12h" },
-        { hour: 20, min: 0, label: "20h" }
+        { hour: 18, min: 0, label: "18h" }
       ];
 
       slots.forEach(slot => {
         if (hours === slot.hour && minutes === slot.min) {
-          const lastBackup = localStorage.getItem(`last_backup_${slot.label}`);
-          if (lastBackup !== today) {
-            performBackup(slot.label);
-          }
+          performBackup(slot.label);
         }
       });
     };
 
-    const interval = setInterval(checkTime, 60000); // Check every minute
-    checkTime(); // Run once on mount
+    const interval = setInterval(checkTime, 30000); // Check more frequently but performBackup has the guard
+    checkTime();
 
     return () => clearInterval(interval);
   }, [autoBackupEnabled, googleAppsScriptUrl, performBackup]);
