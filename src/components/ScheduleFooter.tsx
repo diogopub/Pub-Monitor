@@ -99,7 +99,7 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
     
     return rosterIds
       .map(id => networkState.members.find(m => m.id === id))
-      .filter((m): m is TeamMember => !!m)
+      .filter((m): m is TeamMember => !!m && m.role !== "management")
       .map((m) => ({
         id: m.id,
         name: m.name,
