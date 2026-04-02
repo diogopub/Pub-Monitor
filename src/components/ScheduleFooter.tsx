@@ -148,8 +148,7 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
           ) : (
             /* ─── Default schedule view ─── */
             <ScrollArea className="max-h-[50vh]">
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse min-w-[500px]">
+              <table className="w-full border-collapse">
                   <thead>
                     <tr>
                       <th className="w-[80px] text-left px-2 py-1 sticky left-0 z-10 bg-black/20 backdrop-blur-sm">
@@ -264,7 +263,6 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
                     })}
                   </tbody>
                 </table>
-              </div>
             </ScrollArea>
           )}
         </div>
