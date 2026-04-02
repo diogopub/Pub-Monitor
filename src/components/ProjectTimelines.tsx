@@ -304,15 +304,7 @@ function TimelineRow({
                 className={`flex-1 border-l border-white/5 relative
                   ${isOffDay ? "bg-white/[0.02]" : ""}
                   ${isToday ? "bg-primary/5" : ""}`}
-              >
-                {/* Day header */}
-                <div className={`absolute top-2 w-full text-center text-[9px] font-mono select-none pointer-events-none leading-tight
-                  ${isToday ? "text-primary font-bold" : "text-white/25"}`}>
-                  <div>{DAYS[dow]}</div>
-                  <div>{d.getDate()}</div>
-                  {isToday && <div className="w-1 h-1 bg-primary rounded-full mx-auto mt-0.5" />}
-                </div>
-              </div>
+              />
             );
           })}
           <div className="border-l border-white/5" />
@@ -445,8 +437,8 @@ export default function ProjectTimelines() {
         className="rounded-lg overflow-hidden border border-white/10"
         style={{ background: "#11131a" }}
       >
-        {/* Header with navigation */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-black/30">
+        {/* Header with navigation - Sticky */}
+        <div className="sticky top-0 z-50 flex items-center gap-3 px-4 py-2.5 border-b border-white/10 bg-[#11131a]/95 backdrop-blur-md">
           <svg viewBox="0 0 24 24" className="w-4 h-4 text-primary/80" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
           </svg>
@@ -481,8 +473,8 @@ export default function ProjectTimelines() {
           </button>
         </div>
 
-        {/* Column header row (shared day labels above all project rows) */}
-        <div className="flex border-b border-white/10">
+        {/* Column header row (shared day labels above all project rows) - Also Sticky */}
+        <div className="sticky top-[45px] z-40 flex border-b border-white/10 bg-[#11131a]/90 backdrop-blur-sm">
           {/* Label column spacer */}
           <div className="shrink-0 bg-[#11131a]/60 border-r border-white/10" style={{ width: `${LABEL_W}px` }} />
           {/* Day headers */}
@@ -507,6 +499,7 @@ export default function ProjectTimelines() {
           })}
           <div className="border-l border-white/5 w-0" />
         </div>
+
 
         {/* Project rows */}
         <div>
