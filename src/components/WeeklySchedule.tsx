@@ -1286,6 +1286,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       // 3. PUSH: Re-inserir todas as atividades que existem no Monitor atualmente
       let successCount = 0;
       let failCount = 0;
+      const reported403Emails = new Set<string>();
 
       if (entriesToSync.length > 0) {
         for (let i = 0; i < entriesToSync.length; i++) {
@@ -1314,7 +1315,15 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
               updateEntry(entry.id, { googleEventIds: response.ids });
               successCount++;
             } else {
-              if (response.error) console.error(`[ForceSync] Erro GCal em ${entry.id}:`, response.error);
+              if (response.error) {
+                console.error(`[ForceSync] Erro GCal em ${entry.id}:`, response.error);
+                if (response.error.includes("403")) {
+                  if (!reported403Emails.has(memberEmail)) {
+                    toast.error(`Sem acesso para sincronizar a agenda de: ${memberEmail}`, { duration: 6000 });
+                    reported403Emails.add(memberEmail);
+                  }
+                }
+              }
               failCount++;
             }
           } catch (err) {
