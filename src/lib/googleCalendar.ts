@@ -156,8 +156,12 @@ export async function deleteEventsFromGoogleCalendar(eventIds: string[], memberE
   
   // Se houver algum erro de AuthError, devemos explodir
   for (const result of results) {
-     if (result.status === 'rejected' && result.reason instanceof Error && result.reason.message.includes("AuthError")) {
+     if (result.status === 'rejected') {
+        if (result.reason instanceof Error && result.reason.message.includes("AuthError")) {
           throw result.reason;
+        } else {
+          console.warn("[GCal Sync] Event Deletion Failed (Ignored/Swallowed):", result.reason);
+        }
      }
   }
 }

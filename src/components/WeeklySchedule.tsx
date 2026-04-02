@@ -748,8 +748,7 @@ function ScheduleCell({
           memberId, date, slotIndex: targetRowIndex, 
           startOffset: targetStartOffset, 
           startSlot: targetStartSlot,
-          duration: newDurationSlots,
-          googleEventIds: [] // Limpa temporariamente
+          duration: newDurationSlots
         });
 
         // Background Sync
@@ -802,8 +801,8 @@ function ScheduleCell({
       const newStartSlot = updates.startSlot ?? entry.startSlot;
       const newMemberId = updates.memberId ?? entry.memberId;
 
-      // 1. Atualização Otimista
-      updateEntry(entryId, { ...updates, googleEventIds: [] });
+      // 1. Atualização Otimista (Mantém os IDs antigos até que a sincronia termine)
+      updateEntry(entryId, { ...updates });
 
       // 2. Sincronização em Background
       (async () => {
@@ -825,7 +824,7 @@ function ScheduleCell({
           updateEntry(entryId, { googleEventIds: newGoogleIds });
         } catch (err: any) {
           console.error("GCal background update error:", err);
-          toast.error("Erro na sincronia Google. A alteração local foi mantida.");
+          toast.error("Erro na sincronia Google. A alteração local foi mantida, mas pode estar dessincronizada.");
         }
       })();
     } else {
