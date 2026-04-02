@@ -302,13 +302,16 @@ function TaskBar({
   proj,
   removeEntry,
   updateEntry,
+  viewMode,
 }: {
   entry: ScheduleEntry;
   act: ActivityType;
   proj: any;
   removeEntry: (id: string) => void;
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => Promise<void> | void;
+  viewMode?: "week" | "fortnight" | "month";
 }) {
+  const isMonth = viewMode === "month";
   // Live preview during resize: { startSlot, durationSlots } | null
   const [preview, setPreview] = useState<{ startSlot: number; durationSlots: number } | null>(null);
   const isResizingRef = useRef(false);
@@ -322,7 +325,7 @@ function TaskBar({
   //          clamp to [1, 8 - startSlot]; startSlot NEVER changes.
   const startRightResize = (e: React.MouseEvent) => {
     e.stopPropagation();
-    e.preventDefault();
+    if (isResizingRef.current || isMonth) { e.preventDefault(); return; }
     isResizingRef.current = true;
 
     const cellRect = getCellRect();
@@ -366,7 +369,7 @@ function TaskBar({
   //          newDuration = originalEndSlot - newStartSlot
   const startLeftResize = (e: React.MouseEvent) => {
     e.stopPropagation();
-    e.preventDefault();
+    if (isResizingRef.current || isMonth) { e.preventDefault(); return; }
     isResizingRef.current = true;
 
     const cellRect = getCellRect();
@@ -407,7 +410,7 @@ function TaskBar({
 
   // ── HTML5 drag-to-move (blocked during resize) ─────────────────
   const handleDragStart = (e: React.DragEvent) => {
-    if (isResizingRef.current) { e.preventDefault(); return; }
+    if (isResizingRef.current || isMonth) { e.preventDefault(); return; }
     e.stopPropagation();
     const { startSlot } = entryToSlots(entry);
 
@@ -443,8 +446,12 @@ function TaskBar({
 
   const leftPct  = (displayStart / SCHEDULE_SLOTS) * 100;
   const widthPct = (displayDur  / SCHEDULE_SLOTS) * 100;
-  const rowTop   = (entry.slotIndex || 0) * 22 + 2;
-  const barHeight = act.id === "entrega-pub" ? 18 : 20;
+  
+  const slotHeight = isMonth ? 8 : 22;
+  const rowTop   = (entry.slotIndex || 0) * slotHeight + (isMonth ? 1 : 2);
+  const barHeight = isMonth ? 5 : (act.id === "entrega-pub" ? 18 : 20);
+  
+  const label = entry.customLabel || (proj ? proj.name : act.label);
 
   return (
     <div
@@ -462,7 +469,9 @@ function TaskBar({
         left: `${leftPct}%`,
         width: `${widthPct}%`,
         height: `${barHeight}px`,
+        opacity: isMonth ? 0.9 : 1,
       }}
+      title={isMonth ? label : undefined}
       onClick={(e) => e.stopPropagation()}
     >
       {/* ── Floating Time Labels (Resizing) ─── */}
@@ -486,25 +495,29 @@ function TaskBar({
       </div>
 
       {/* ── Label ─── */}
-      <div className="flex-1 truncate text-center px-3 pointer-events-none select-none">
-        {entry.customLabel || (proj ? proj.name : act.label)}
-      </div>
+      {!isMonth && (
+        <div className="flex-1 truncate text-center px-3 pointer-events-none select-none">
+          {label}
+        </div>
+      )}
 
       {/* ── RIGHT controls (delete + resize) ─── */}
-      <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity z-20">
-        <button
-          onClick={(e) => { e.stopPropagation(); removeEntry(entry.id); }}
-          className="hover:bg-black/20 text-white rounded p-0.5 mr-0.5"
-        >
-          <X className="w-2.5 h-2.5" />
-        </button>
-        <div
-          className="w-2.5 h-full cursor-ew-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
-          onMouseDown={startRightResize}
-        >
-          <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
+      {!isMonth && (
+        <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity z-20">
+          <button
+            onClick={(e) => { e.stopPropagation(); removeEntry(entry.id); }}
+            className="hover:bg-black/20 text-white rounded p-0.5 mr-0.5"
+          >
+            <X className="w-2.5 h-2.5" />
+          </button>
+          <div
+            className="w-2.5 h-full cursor-ew-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
+            onMouseDown={startRightResize}
+          >
+            <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -524,11 +537,14 @@ function ScheduleCell({
   memberId,
   date,
   isEntradaEntrega = false,
+  viewMode,
 }: {
   memberId: string;
   date: string;
   isEntradaEntrega?: boolean;
+  viewMode?: "week" | "fortnight" | "month";
 }) {
+  const isMonth = viewMode === "month";
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const { state: networkState } = useNetwork();
@@ -548,6 +564,7 @@ function ScheduleCell({
   };
 
   const handleDragOver = (e: React.DragEvent) => {
+    if (isMonth) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = e.altKey ? "copy" : "move";
   };
@@ -672,7 +689,8 @@ function ScheduleCell({
 
   // ─── Cálculo de Altura Dinâmica ────────────────────────────────
   const maxSlot = entries.reduce((acc, e) => Math.max(acc, e.slotIndex || 0), 2);
-  const dynamicHeight = (maxSlot + 1) * 22 + 2;
+  const slotHeight = isMonth ? 8 : 22;
+  const dynamicHeight = (maxSlot + 1) * slotHeight + 2;
 
   // 2. MOVER ou COPIAR (drag & drop)
   const handleDrop = async (e: React.DragEvent) => {
@@ -874,7 +892,8 @@ function ScheduleCell({
   };
 
   return (
-    <Popover open={open} onOpenChange={(o) => {
+    <Popover open={!isMonth && open} onOpenChange={(o) => {
+      if (isMonth) return;
       setOpen(o);
       if (!o) {
         setStep("activity");
@@ -883,7 +902,7 @@ function ScheduleCell({
     }}>
       <PopoverTrigger asChild>
         <div
-          className="relative cursor-pointer hover:bg-black/5 w-full"
+          className={`relative w-full ${!isMonth ? "cursor-pointer hover:bg-black/5" : ""}`}
           style={{ height: `${dynamicHeight}px` }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
@@ -903,6 +922,7 @@ function ScheduleCell({
                 proj={proj}
                 removeEntry={handleRemoveEntry}
                 updateEntry={handleUpdateEntry}
+                viewMode={viewMode}
               />
             );
           })}
@@ -1508,7 +1528,12 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                           }`}
                         style={{ zIndex: 10 - dayIdx }}
                       >
-                        <ScheduleCell memberId={row.id} date={dateStr} isEntradaEntrega={isEntrada} />
+                        <ScheduleCell 
+                          memberId={row.id} 
+                          date={dateStr} 
+                          isEntradaEntrega={isEntrada} 
+                          viewMode={viewMode}
+                        />
                       </td>
                     );
                   })}
