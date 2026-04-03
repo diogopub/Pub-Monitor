@@ -340,6 +340,14 @@ function TimelineRow({
             labels.every((_, idx) => pin.completedLabels?.[idx] === true);
           const effectiveColor = allCompleted ? "#22c55e" : pinColor(pin.color);
 
+          const completedByNames = labels
+            .map((_, i) => pin.completedBy?.[i])
+            .filter(Boolean) as string[];
+          const uniqueNames = Array.from(new Set(completedByNames));
+          const pinTooltip = allCompleted && uniqueNames.length > 0
+            ? `Feito por ${uniqueNames.join(", ")}`
+            : undefined;
+
           const HEAD_H = 16;
           const STICK_H = 12;
 
@@ -351,7 +359,7 @@ function TimelineRow({
             >
               {/* Date label */}
               <div
-                className="absolute text-[9px] font-mono font-bold text-white/80 select-none text-center"
+                className="absolute text-[9px] font-mono font-bold text-white/80 select-none text-center pointer-events-auto"
                 style={{
                   top: `${TIMELINE_Y - HEAD_H - STICK_H - 14}px`,
                   left: "50%",
@@ -367,7 +375,7 @@ function TimelineRow({
 
               {/* Pin head */}
               <div
-                className="absolute rounded-sm border border-black/40 shadow-lg transition-colors duration-500"
+                className="absolute rounded-sm border border-black/40 shadow-lg transition-colors duration-500 pointer-events-auto"
                 style={{
                   top: `${TIMELINE_Y - HEAD_H - STICK_H}px`,
                   left: "50%",
@@ -377,6 +385,7 @@ function TimelineRow({
                   backgroundColor: effectiveColor,
                   boxShadow: `0 0 6px ${effectiveColor}88`,
                 }}
+                title={pinTooltip}
               />
 
               {/* Pin stick */}
@@ -395,24 +404,23 @@ function TimelineRow({
 
               {/* Labels below line */}
               <div
-                className="absolute flex flex-col items-stretch gap-1 px-0.5 w-full"
+                className="absolute flex flex-col items-stretch gap-1 px-0.5 w-full pointer-events-auto"
                 style={{ top: `${TIMELINE_Y + 6}px` }}
               >
                 {labels.map((lab: string, i: number) => {
                   const isLabelDone = pin.completedLabels?.[i] === true;
                   const checkedBy: string | null = pin.completedBy?.[i] ?? null;
-                  const displayText = isLabelDone && checkedBy ? checkedBy : lab;
                   return (
                     <div
                       key={i}
                       className={`w-full text-center text-[8px] font-bold font-heading uppercase tracking-wide rounded px-0.5 py-0.5 border leading-tight whitespace-nowrap overflow-hidden text-ellipsis transition-colors duration-300 ${
                         isLabelDone
-                          ? "text-emerald-300 bg-emerald-900/40 border-emerald-500/30"
+                          ? "text-emerald-300 bg-emerald-900/40 border-emerald-500/30 line-through opacity-80"
                           : "text-white/70 bg-[#11131a]/80 border-white/10"
                       }`}
                       title={isLabelDone && checkedBy ? `Feito por ${checkedBy}` : lab}
                     >
-                      {displayText}
+                      {lab}
                     </div>
                   );
                 })}
