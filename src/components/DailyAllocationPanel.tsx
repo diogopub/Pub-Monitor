@@ -355,6 +355,14 @@ function TimelinePinElement({
 }) {
   const pinLabels = pin.labels && pin.labels.length > 0 ? pin.labels : ["ENTRADA"];
 
+  // Logic for completion overriding colors, identical to ProjectTimelines
+  const allCompleted = pinLabels.length > 0 && pinLabels.every((_, idx) => pin.completedLabels?.[idx] === true);
+  
+  const completedByNames = pinLabels
+    .map((_, i) => pin.completedBy?.[i])
+    .filter(Boolean) as string[];
+  const uniqueNames = Array.from(new Set(completedByNames));
+
   const handleUpdateLabel = (idx: number, newVal: string) => {
     const newLabels = [...pinLabels];
     newLabels[idx] = newVal;
@@ -381,6 +389,7 @@ function TimelinePinElement({
   };
 
   const getHoverLabel = (color: string) => {
+    if (allCompleted && uniqueNames.length > 0) return `Feito por ${uniqueNames.join(", ")}`;
     if (color === "green") return "Feito";
     if (color === "yellow") return "Entrega Alteração";
     if (color === "red") return "Entrega Final";
@@ -388,10 +397,13 @@ function TimelinePinElement({
   };
   const hoverLabel = getHoverLabel(pin.color);
 
-  const colorHex =
+  let colorHex =
     pin.color === "white" ? "#fff" : 
     pin.color === "green" ? "#22c55e" : 
     pin.color === "yellow" ? "#facc15" : "#ef4444";
+  
+  // If completed, override with the solid green
+  if (allCompleted) colorHex = "#22c55e";
 
   const PIN_HEAD_H = 20; // px height of pin head rectangle
   const PIN_STICK_H = 16; // px height of stick below head
@@ -430,17 +442,17 @@ function TimelinePinElement({
       >
         <button
           className={cn(
-            "w-3 rounded border border-black/50 shadow-[0_0_8px_rgba(0,0,0,0.6)] transition-transform",
+            "w-3 rounded border border-black/50 shadow-[0_0_8px_rgba(0,0,0,0.6)] transition-all duration-500",
             !readOnly && "hover:scale-110 relative"
           )}
-          style={{ backgroundColor: colorHex, height: `${PIN_HEAD_H}px` }}
+          style={{ backgroundColor: colorHex, height: `${PIN_HEAD_H}px`, boxShadow: `0 0 6px ${colorHex}88` }}
           onClick={(e) => { 
             if (!readOnly) {
               e.stopPropagation(); 
               handleToggleColor(); 
             }
           }}
-          title={readOnly ? hoverLabel || undefined : undefined}
+          title={readOnly && hoverLabel && !allCompleted ? hoverLabel : undefined}
         >
           {/* Hover Label */}
           {hoverLabel && (
@@ -502,21 +514,34 @@ function TimelinePinElement({
           const isCustom = lab !== "" && !PIN_LABELS.includes(lab);
           const selectValue = isCustom ? "OUTROS" : lab || "ENTRADA";
 
+          const isLabelDone = pin.completedLabels?.[index] === true;
+          const checkedBy = pin.completedBy?.[index] ?? null;
+          const containerTitle = isLabelDone && checkedBy ? `Feito por ${checkedBy}` : undefined;
+
+          const baseClasses = "h-auto min-h-[24px] py-1 px-1 text-[9.5px] shadow-md border rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading uppercase tracking-wider transition-all";
+          const normalClasses = "bg-[#11131a]/90 border-white/10 text-muted-foreground hover:text-white";
+          const completedClasses = "bg-emerald-900/40 border-emerald-500/30 text-emerald-300 line-through opacity-80 cursor-default text-center hover:text-emerald-300";
+
           return (
-            <div key={index} className="relative group/label w-full">
+            <div key={index} className="relative group/label w-full" title={containerTitle}>
               {isCustom || lab === "OUTROS" ? (
                 <div className="relative flex items-center w-full">
                   <Input
                     autoFocus
-                    className="h-6 w-full text-[9.5px] md:text-[9.5px] px-1 py-0 text-center bg-[#11131a]/90 border-white/10 rounded shadow-md text-muted-foreground font-bold font-heading uppercase tracking-wider focus-visible:ring-1 focus-visible:ring-primary/50 focus:text-foreground transition-all leading-tight"
+                    className={cn(
+                      "w-full px-1 py-0! focus-visible:ring-1 focus-visible:ring-primary/50",
+                      baseClasses,
+                      isLabelDone ? completedClasses : normalClasses,
+                      !isLabelDone && "focus:text-foreground"
+                    )}
                     value={lab === "OUTROS" ? "" : lab}
                     onChange={(e) => { if (!readOnly) handleUpdateLabel(index, e.target.value); }}
                     onBlur={() => { if (!readOnly && (!lab || lab === "OUTROS")) handleUpdateLabel(index, "ENTRADA"); }}
-                    readOnly={readOnly}
+                    readOnly={readOnly || isLabelDone}
                     placeholder={readOnly ? "" : "Digite..."}
                     onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                   />
-                  {!readOnly && (
+                  {!readOnly && !isLabelDone && (
                     <button
                       onClick={() => handleUpdateLabel(index, "ENTRADA")}
                       className="absolute -right-5 text-muted-foreground hover:text-white"
@@ -530,9 +555,13 @@ function TimelinePinElement({
                    <Select 
                       value={selectValue} 
                       onValueChange={(val) => { if (!readOnly) handleUpdateLabel(index, val); }}
-                      disabled={readOnly}
+                      disabled={readOnly || isLabelDone}
                     >
-                      <SelectTrigger className="[&>svg]:hidden w-full h-auto min-h-[24px] py-1 px-1 text-[9.5px] bg-[#11131a]/90 shadow-md border border-white/10 rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading hover:text-white text-muted-foreground flex justify-center uppercase tracking-wider transition-all disabled:opacity-100 disabled:cursor-default">
+                      <SelectTrigger className={cn(
+                        "[&>svg]:hidden flex justify-center disabled:opacity-80 disabled:cursor-default",
+                         baseClasses,
+                         isLabelDone ? completedClasses : normalClasses
+                      )}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-[300px] z-[99999]">
