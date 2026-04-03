@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { db } from "@/lib/firebase";
-import { 
-  doc, 
-  onSnapshot, 
-  setDoc, 
-  collection,
+import {
+  doc,
+  getDoc,
+  onSnapshot,
+  setDoc,
 } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 
@@ -38,106 +38,126 @@ interface PermissionsContextType {
 const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
 
 export function PermissionsProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [authorizedUsers, setAuthorizedUsers] = useState<AuthorizedUser[]>([]);
   const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load authorized and pending users
+  // Two independent listeners on specific documents — avoids fetching the whole collection
   useEffect(() => {
-    console.log("PermissionsProvider: Iniciando listener do Firestore...");
-    const unsub = onSnapshot(collection(db, "config"), (snapshot) => {
-      const usersDoc = snapshot.docs.find(d => d.id === "authorized_users");
-      const pendingDoc = snapshot.docs.find(d => d.id === "pending_users");
-      
-      if (usersDoc) {
-        setAuthorizedUsers(usersDoc.data().list || []);
-      } else {
-        setAuthorizedUsers([]);
+    // Wait for Firebase Auth to resolve before starting Firestore listeners
+    // to avoid a race where `user` is null while onAuthStateChanged is still pending.
+    if (authLoading) return;
+
+    const unsubUsers = onSnapshot(
+      doc(db, "config", "authorized_users"),
+      (snapshot) => {
+        setAuthorizedUsers(snapshot.exists() ? (snapshot.data().list || []) : []);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("PermissionsProvider: Erro ao carregar authorized_users:", error);
+        setLoading(false);
       }
+    );
 
-      if (pendingDoc) {
-        setPendingUsers(pendingDoc.data().list || []);
-      } else {
-        setPendingUsers([]);
+    const unsubPending = onSnapshot(
+      doc(db, "config", "pending_users"),
+      (snapshot) => {
+        setPendingUsers(snapshot.exists() ? (snapshot.data().list || []) : []);
+      },
+      (error) => {
+        console.error("PermissionsProvider: Erro ao carregar pending_users:", error);
       }
-      
-      setLoading(false);
-    }, (error) => {
-      console.error("PermissionsProvider: Erro no Firestore:", error);
-      setLoading(false);
-    });
+    );
 
-    return () => unsub();
-  }, []);
+    return () => {
+      unsubUsers();
+      unsubPending();
+    };
+  }, [authLoading]);
 
+  // Role is derived exclusively from Firestore — no hardcoded admin fallback
   const currentUserRole = React.useMemo(() => {
-    if (!user) {
-      console.log("PermissionsProvider: Nenhum usuário logado no AuthContext");
-      return null;
-    }
+    if (!user) return null;
     const email = user.email?.toLowerCase();
-    
-    // Fallback para o administrador principal
-    if (email === "diogo@thepublic.house") {
-      return "admin";
-    }
-
+    if (!email) return null;
     const found = authorizedUsers.find(u => u.email.toLowerCase() === email);
-    console.log(`PermissionsProvider: Verificando e-mail ${email}. Encontrado:`, found);
     return found ? found.role : null;
   }, [user, authorizedUsers]);
 
   const isAuthorized = !!currentUserRole;
 
+  // Combine Firestore loading with auth loading so consumers see a single boolean
+  const isLoading = loading || (authLoading ?? false);
+
+  // ─── Write helpers — read from Firestore before writing to avoid concurrent overwrites ──
+
   const addAuthorizedUser = async (email: string, role: UserRole) => {
-    const newList = [...authorizedUsers.filter(u => u.email !== email), {
-      email,
-      role,
-      addedAt: Date.now()
-    }];
-    await setDoc(doc(db, "config", "authorized_users"), { list: newList });
+    const ref = doc(db, "config", "authorized_users");
+    const snapshot = await getDoc(ref);
+    const currentList: AuthorizedUser[] = snapshot.exists() ? (snapshot.data().list || []) : [];
+    const newList = [
+      ...currentList.filter(u => u.email.toLowerCase() !== email.toLowerCase()),
+      { email: email.toLowerCase(), role, addedAt: Date.now() }
+    ];
+    await setDoc(ref, { list: newList });
   };
 
   const removeAuthorizedUser = async (email: string) => {
-    const newList = authorizedUsers.filter(u => u.email !== email);
-    await setDoc(doc(db, "config", "authorized_users"), { list: newList });
+    const ref = doc(db, "config", "authorized_users");
+    const snapshot = await getDoc(ref);
+    const currentList: AuthorizedUser[] = snapshot.exists() ? (snapshot.data().list || []) : [];
+    const newList = currentList.filter(u => u.email.toLowerCase() !== email.toLowerCase());
+    await setDoc(ref, { list: newList });
   };
 
   const requestAccess = async (userData: { email: string; name?: string; photoURL?: string }) => {
+    const normalizedEmail = userData.email.toLowerCase();
+
     // Check if already authorized
-    const isAuth = authorizedUsers.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
+    const isAuth = authorizedUsers.find(u => u.email.toLowerCase() === normalizedEmail);
     if (isAuth) return;
 
     // Check if already requested
-    const alreadyPending = pendingUsers.find(u => u.email.toLowerCase() === userData.email.toLowerCase());
+    const alreadyPending = pendingUsers.find(u => u.email.toLowerCase() === normalizedEmail);
     if (alreadyPending) return;
 
-    const newList = [...pendingUsers, {
-      email: userData.email,
-      name: userData.name,
-      photoURL: userData.photoURL,
-      requestedAt: Date.now()
-    }];
-    await setDoc(doc(db, "config", "pending_users"), { list: newList });
+    const ref = doc(db, "config", "pending_users");
+    const snapshot = await getDoc(ref);
+    const currentList: PendingUser[] = snapshot.exists() ? (snapshot.data().list || []) : [];
+
+    const newList = [
+      ...currentList.filter(u => u.email.toLowerCase() !== normalizedEmail),
+      {
+        email: normalizedEmail, // normalized at save time
+        name: userData.name,
+        photoURL: userData.photoURL,
+        requestedAt: Date.now()
+      }
+    ];
+    await setDoc(ref, { list: newList });
   };
 
   const removePendingRequest = async (email: string) => {
-    const newList = pendingUsers.filter(u => u.email !== email);
-    await setDoc(doc(db, "config", "pending_users"), { list: newList });
+    const ref = doc(db, "config", "pending_users");
+    const snapshot = await getDoc(ref);
+    const currentList: PendingUser[] = snapshot.exists() ? (snapshot.data().list || []) : [];
+    const newList = currentList.filter(u => u.email.toLowerCase() !== email.toLowerCase());
+    await setDoc(ref, { list: newList });
   };
 
   return (
-    <PermissionsContext.Provider value={{ 
-      authorizedUsers, 
+    <PermissionsContext.Provider value={{
+      authorizedUsers,
       pendingUsers,
-      currentUserRole, 
-      addAuthorizedUser, 
+      currentUserRole,
+      addAuthorizedUser,
       removeAuthorizedUser,
       requestAccess,
       removePendingRequest,
       isAuthorized,
-      loading
+      loading: isLoading
     }}>
       {children}
     </PermissionsContext.Provider>
