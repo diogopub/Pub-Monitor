@@ -415,7 +415,7 @@ function TimelineRow({
                       key={i}
                       className={`w-full text-center text-[8px] font-bold font-heading uppercase tracking-wide rounded px-0.5 py-0.5 border leading-tight whitespace-nowrap overflow-hidden text-ellipsis transition-colors duration-300 ${
                         isLabelDone
-                          ? "text-emerald-300 bg-emerald-900/40 border-emerald-500/30 line-through opacity-80"
+                          ? "text-emerald-300 bg-emerald-900/40 border-emerald-500/30"
                           : "text-white/70 bg-[#11131a]/80 border-white/10"
                       }`}
                       title={isLabelDone && checkedBy ? `Feito por ${checkedBy}` : lab}
