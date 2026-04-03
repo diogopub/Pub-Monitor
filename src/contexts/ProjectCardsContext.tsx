@@ -38,6 +38,7 @@ export interface TimelinePin {
   label?: string;
   labels: string[];
   completedLabels?: boolean[];
+  completedBy?: (string | null)[]; // name of the user who checked each label
 }
 
 export type ProjectStatus = "em-desenvolvimento" | "onboarding" | "standby" | "aguardando-retorno";

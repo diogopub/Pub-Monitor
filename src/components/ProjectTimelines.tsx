@@ -333,7 +333,12 @@ function TimelineRow({
           const labels: string[] = Array.isArray(pin.labels) && pin.labels.length > 0
             ? pin.labels
             : ["ENTRADA"];
-          const color = pinColor(pin.color);
+
+          // If all labels are completed, override color to green
+          const allCompleted =
+            labels.length > 0 &&
+            labels.every((_, idx) => pin.completedLabels?.[idx] === true);
+          const effectiveColor = allCompleted ? "#22c55e" : pinColor(pin.color);
 
           const HEAD_H = 16;
           const STICK_H = 12;
@@ -362,29 +367,29 @@ function TimelineRow({
 
               {/* Pin head */}
               <div
-                className="absolute rounded-sm border border-black/40 shadow-lg"
+                className="absolute rounded-sm border border-black/40 shadow-lg transition-colors duration-500"
                 style={{
                   top: `${TIMELINE_Y - HEAD_H - STICK_H}px`,
                   left: "50%",
                   transform: "translateX(-50%)",
                   width: 10,
                   height: HEAD_H,
-                  backgroundColor: color,
-                  boxShadow: `0 0 6px ${color}66`,
+                  backgroundColor: effectiveColor,
+                  boxShadow: `0 0 6px ${effectiveColor}88`,
                 }}
               />
 
               {/* Pin stick */}
               <div
-                className="absolute"
+                className="absolute transition-colors duration-500"
                 style={{
                   top: `${TIMELINE_Y - STICK_H}px`,
                   left: "50%",
                   transform: "translateX(-50%)",
                   width: 2,
                   height: STICK_H,
-                  background: color,
-                  boxShadow: `0 0 4px ${color}66`,
+                  background: effectiveColor,
+                  boxShadow: `0 0 4px ${effectiveColor}88`,
                 }}
               />
 
@@ -393,14 +398,24 @@ function TimelineRow({
                 className="absolute flex flex-col items-stretch gap-1 px-0.5 w-full"
                 style={{ top: `${TIMELINE_Y + 6}px` }}
               >
-                {labels.map((lab: string, i: number) => (
-                  <div
-                    key={i}
-                    className="w-full text-center text-[8px] font-bold font-heading uppercase tracking-wide text-white/70 bg-[#11131a]/80 rounded px-0.5 py-0.5 border border-white/10 leading-tight whitespace-nowrap overflow-hidden text-ellipsis"
-                  >
-                    {lab}
-                  </div>
-                ))}
+                {labels.map((lab: string, i: number) => {
+                  const isLabelDone = pin.completedLabels?.[i] === true;
+                  const checkedBy: string | null = pin.completedBy?.[i] ?? null;
+                  const displayText = isLabelDone && checkedBy ? checkedBy : lab;
+                  return (
+                    <div
+                      key={i}
+                      className={`w-full text-center text-[8px] font-bold font-heading uppercase tracking-wide rounded px-0.5 py-0.5 border leading-tight whitespace-nowrap overflow-hidden text-ellipsis transition-colors duration-300 ${
+                        isLabelDone
+                          ? "text-emerald-300 bg-emerald-900/40 border-emerald-500/30"
+                          : "text-white/70 bg-[#11131a]/80 border-white/10"
+                      }`}
+                      title={isLabelDone && checkedBy ? `Feito por ${checkedBy}` : lab}
+                    >
+                      {displayText}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChevronLeft, ChevronRight, Activity, CalendarDays } from "lucide-react";
 import { useMemo } from "react";
 import { usePermissions } from "@/contexts/PermissionsContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
 interface SidePanelProps {
@@ -44,7 +45,10 @@ export default function SidePanel({
 }: SidePanelProps) {
   const { state: cardsState, updateCard } = useProjectCards();
   const { currentUserRole } = usePermissions();
+  const { user } = useAuth();
   const readOnly = currentUserRole === "viewer";
+  // Extract first name from Google display name, e.g. "Paola Barbosa" → "Paola"
+  const currentUserFirstName = user?.displayName?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "Usuário";
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -92,10 +96,12 @@ export default function SidePanel({
 
     const newPins = card.timelinePins.map((p) => {
       if (p.id !== pinId) return p;
-      // Initialize if missing
       const completedLabels = p.completedLabels ? [...p.completedLabels] : new Array(p.labels.length).fill(false);
-      completedLabels[labelIndex] = !currentStatus;
-      return { ...p, completedLabels };
+      const completedBy = p.completedBy ? [...p.completedBy] : new Array(p.labels.length).fill(null);
+      const newStatus = !currentStatus;
+      completedLabels[labelIndex] = newStatus;
+      completedBy[labelIndex] = newStatus ? currentUserFirstName : null;
+      return { ...p, completedLabels, completedBy };
     });
 
     updateCard(cardId, { timelinePins: newPins });
@@ -139,9 +145,34 @@ export default function SidePanel({
               <CalendarDays className="w-4 h-4 text-primary" />
               TIMELINE DA SEMANA
             </h2>
-            <p className="text-xs text-muted-foreground mt-1 leading-snug">
-              Próximos passos e entregas dos projetos nos próximos 14 dias
-            </p>
+            {/* Today's delivery status LED */}
+            {(() => {
+              const todayStr = formatISO(today);
+              const todayGroup = groupedPins[todayStr];
+              if (!todayGroup) {
+                return (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] shrink-0" />
+                    <span className="text-[11px] font-semibold text-emerald-400">Entregas Feitas</span>
+                  </div>
+                );
+              }
+              const allPins = Object.values(todayGroup.projects).flatMap(p => p.pins);
+              const hasPending = allPins.some(pin =>
+                pin.labels.some((_, idx) => !(pin.completedLabels?.[idx]))
+              );
+              return hasPending ? (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)] shrink-0 animate-pulse" />
+                  <span className="text-[11px] font-semibold text-red-400">Entregas Pendentes</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)] shrink-0" />
+                  <span className="text-[11px] font-semibold text-emerald-400">Entregas Feitas</span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Scrollable Content */}
