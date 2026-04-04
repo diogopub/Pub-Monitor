@@ -518,7 +518,7 @@ function TimelinePinElement({
           const checkedBy = pin.completedBy?.[index] ?? null;
           const containerTitle = isLabelDone && checkedBy ? `Feito por ${checkedBy}` : undefined;
 
-          const baseClasses = "h-auto min-h-[24px] py-1 px-1 text-[9.5px] shadow-md border rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading uppercase tracking-wider transition-all";
+          const baseClasses = "w-full h-auto min-h-[24px] py-1 px-1 text-[9.5px] shadow-md border rounded text-center focus:ring-0 whitespace-normal leading-tight font-bold font-heading uppercase tracking-wider transition-all";
           const normalClasses = "bg-[#11131a]/90 border-white/10 text-muted-foreground hover:text-white";
           const completedClasses = "bg-emerald-900/40 border-emerald-500/30 text-emerald-300 cursor-default text-center hover:text-emerald-300";
 

@@ -44,6 +44,7 @@ import {
   UserX,
   RotateCw,
   RefreshCcw,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -570,17 +571,6 @@ function ScheduleCell({
   };
 
   // ─── Google Calendar helpers ──────────────────────────────────────
-  const getMemberEmail = (mId: string): string => {
-    const member = networkState.members.find(m => m.id === mId);
-    return member?.email || "";
-  };
-
-  const getProjectName = (projectId?: string, customLabel?: string): string => {
-    if (customLabel) return customLabel.toUpperCase();
-    if (!projectId) return "";
-    const card = cardsState.cards.find(c => c.id === projectId);
-    return card?.name?.toUpperCase() || "";
-  };
 
   // Cria evento(s) no Google Calendar e retorna os IDs criados
   const pushToCalendar = async (
@@ -769,8 +759,13 @@ function ScheduleCell({
           duration: newDurationSlots
         });
 
-        // Background Sync
-        (async () => {
+        // Debounced Sync with Lock
+        if (debounceTimers.current[data.entryId]) clearTimeout(debounceTimers.current[data.entryId]);
+        
+        debounceTimers.current[data.entryId] = setTimeout(async () => {
+          if (syncingIds.has(data.entryId)) return;
+          addToSyncing(data.entryId);
+
           try {
             const t = await ensureGoogleToken();
             if (!t) throw new Error("Sem token");
@@ -778,7 +773,7 @@ function ScheduleCell({
             // Deletar antigos
             if (originalState.googleEventIds?.length) {
               const oldEmail = getMemberEmail(originalState.memberId);
-              await deleteEventsFromGoogleCalendar(originalState.googleEventIds, oldEmail || "", t);
+              await deleteEventsFromGoogleCalendar(originalState.googleEventIds, oldEmail || "", t).catch(e => console.warn("Clean old fail", e));
             }
 
             // Criar novos
@@ -786,11 +781,12 @@ function ScheduleCell({
             updateEntry(data.entryId, { googleEventIds: newIds });
           } catch (err: any) {
             console.error("GCal move transition error:", err);
-            // Reverter se for erro de autenticação crítico ou algo assim?
-            // Por enquanto vamos manter o estado local para evitar "pulos" visuais
             toast.error("Erro ao sincronizar movimento com o Google.");
+          } finally {
+            removeFromSyncing(data.entryId);
+            delete debounceTimers.current[data.entryId];
           }
-        })();
+        }, 500);
       }
     } catch (err) {
       console.error("Failed to parse drop target", err);
@@ -819,11 +815,16 @@ function ScheduleCell({
       const newStartSlot = updates.startSlot ?? entry.startSlot;
       const newMemberId = updates.memberId ?? entry.memberId;
 
-      // 1. Atualização Otimista (Mantém os IDs antigos até que a sincronia termine)
+      // 1. Atualização Otimista
       updateEntry(entryId, { ...updates });
 
-      // 2. Sincronização em Background
-      (async () => {
+      // 2. Sincronização Debounced em Background com Trava
+      if (debounceTimers.current[entryId]) clearTimeout(debounceTimers.current[entryId]);
+
+      debounceTimers.current[entryId] = setTimeout(async () => {
+        if (syncingIds.has(entryId)) return;
+        addToSyncing(entryId);
+
         try {
           const t = await ensureGoogleToken();
           if (!t) throw new Error("Sem autorização Google");
@@ -831,7 +832,7 @@ function ScheduleCell({
           // Limpar antigos
           if (originalEntry.googleEventIds?.length) {
             const oldEmail = getMemberEmail(originalEntry.memberId);
-            await deleteEventsFromGoogleCalendar(originalEntry.googleEventIds, oldEmail || "", t);
+            await deleteEventsFromGoogleCalendar(originalEntry.googleEventIds, oldEmail || "", t).catch(e => console.warn("Clean fail", e));
           }
 
           // Criar novos
@@ -842,9 +843,12 @@ function ScheduleCell({
           updateEntry(entryId, { googleEventIds: newGoogleIds });
         } catch (err: any) {
           console.error("GCal background update error:", err);
-          toast.error("Erro na sincronia Google. A alteração local foi mantida, mas pode estar dessincronizada.");
+          toast.error("Erro na sincronia Google.");
+        } finally {
+          removeFromSyncing(entryId);
+          delete debounceTimers.current[entryId];
         }
-      })();
+      }, 500);
     } else {
       updateEntry(entryId, updates);
     }
@@ -1242,35 +1246,11 @@ function AddMemberToWeekPopover({
 
 export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week" | "fortnight" | "month" }) {
   const { state: networkState } = useNetwork();
-  const { state: scheduleState, getWeekRoster, setWeekRoster, updateEntry } = useSchedule();
+  const { state: scheduleState, getWeekRoster, setWeekRoster, updateEntry, addEntry, removeEntry, getEntriesForCell } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const { googleAccessToken, loginWithGoogle, ensureGoogleToken, clearGoogleToken } = useAuth();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
   const [isSyncing, setIsSyncing] = useState(false);
-
-  // ─── Shared Helpers ─────────────────────────────────────────────
-  const getMemberEmail = (mId: string): string => {
-    const member = networkState.members.find(m => m.id === mId);
-    return member?.email || "";
-  };
-
-  const getProjectName = (projectId?: string, customLabel?: string): string => {
-    if (customLabel) return customLabel.toUpperCase();
-    if (!projectId) return "";
-    const card = cardsState.cards.find(c => c.id === projectId);
-    return card?.name?.toUpperCase() || "";
-  };
-
-  useEffect(() => {
-    if (viewMode === "month") {
-      const today = new Date();
-      setCurrentMonday(new Date(today.getFullYear(), today.getMonth(), 1));
-    } else if (viewMode === "fortnight") {
-      setCurrentMonday(getMonday(new Date()));
-    } else {
-      setCurrentMonday(getMonday(new Date()));
-    }
-  }, [viewMode]);
 
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
 
@@ -1286,6 +1266,115 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     }
     return Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i));
   }, [currentMonday, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === "month") {
+      const today = new Date();
+      setCurrentMonday(new Date(today.getFullYear(), today.getMonth(), 1));
+    } else if (viewMode === "fortnight") {
+      setCurrentMonday(getMonday(new Date()));
+    } else {
+      setCurrentMonday(getMonday(new Date()));
+    }
+  }, [viewMode]);
+
+  // ─── Shared Helpers ─────────────────────────────────────────────
+  const getMemberEmail = (mId: string): string => {
+    const member = networkState.members.find(m => m.id === mId);
+    return member?.email || "";
+  };
+
+  const getProjectName = (projectId?: string, customLabel?: string): string => {
+    if (customLabel) return customLabel.toUpperCase();
+    if (!projectId) return "";
+    const card = cardsState.cards.find(c => c.id === projectId);
+    return card?.name?.toUpperCase() || "";
+  };
+
+  const nanoidLocal = () => Math.random().toString(36).slice(2, 10);
+
+  // ─── Debounce & Lock State ──────────────────────────────────────────
+  const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
+
+  const addToSyncing = (id: string) => setSyncingIds(prev => new Set(prev).add(id));
+  const removeFromSyncing = (id: string) => setSyncingIds(prev => {
+    const next = new Set(prev);
+    next.delete(id);
+    return next;
+  });
+
+  // ─── Force Sync ALL visible members ───────────────────────────────
+  const [isForceSyncing, setIsForceSyncing] = useState(false);
+
+  const handleForceSync = async () => {
+    if (isForceSyncing) return;
+    const t = await ensureGoogleToken();
+    if (!t) {
+      toast.error("Conecte ao Google primeiro.");
+      return;
+    }
+
+    if (!window.confirm("Isso irá apagar e recriar TODOS os eventos sincronizados deste período para todos os membros (exceto gestão). Deseja continuar?")) {
+      return;
+    }
+
+    setIsForceSyncing(true);
+    const toastId = toast.loading("Iniciando sincronização forçada...");
+
+    try {
+      // 1. Definir intervalo do período visível
+      const timeMin = new Date(weekDays[0]).toISOString();
+      const lastDay = weekDays[weekDays.length - 1];
+      const timeMax = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate(), 23, 59, 59).toISOString();
+
+      // 2. Filtrar membros elegíveis (não gestão e com e-mail)
+      const eligibleMembers = networkState.members.filter(m => m.role !== "management" && m.email);
+
+      for (const member of eligibleMembers) {
+        toast.loading(`Sincronizando ${member.name}...`, { id: toastId });
+
+        // A. Limpar agenda do Google no intervalo
+        await purgeMonitorEventsInRange(member.email!, timeMin, timeMax, t);
+
+        // B. Buscar todas as entries DESTE membro NESTE intervalo
+        const memberEntriesInRange = scheduleState.entries.filter(e => 
+          e.memberId === member.id && 
+          weekDays.some(wd => formatDate(wd) === e.date)
+        );
+
+        // C. Re-empurrar cada uma e atualizar IDs locais
+        for (const entry of memberEntriesInRange) {
+          const projectName = getProjectName(entry.projectId, entry.customLabel);
+          if (!projectName) continue;
+
+          const { durationSlots, startSlot } = entryToSlots(entry);
+          const gCalDuration = durationSlots / SCHEDULE_SLOTS;
+          const gCalStartOffset = (startSlot || 0) / SCHEDULE_SLOTS;
+
+          const response = await pushEventToGoogleCalendar(
+            { startDate: entry.date, duration: gCalDuration, startOffset: gCalStartOffset },
+            projectName,
+            member.email!,
+            t
+          );
+
+          if (response.ids.length > 0) {
+            updateEntry(entry.id, { googleEventIds: response.ids });
+          }
+        }
+      }
+
+      toast.success("Sincronização forçada concluída com sucesso!", { id: toastId });
+    } catch (err: any) {
+      console.error("Force sync failed:", err);
+      toast.error("Falha na sincronização forçada.", { id: toastId });
+    } finally {
+      setIsForceSyncing(false);
+    }
+  };
+
+
 
   // Active projects allocations summary
   const activeProjectSummaries = useMemo(() => {
@@ -1394,6 +1483,18 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                 {googleAccessToken ? 'Google Sync' : 'Renovar Sync'}
               </span>
             </button>
+
+            {googleAccessToken && (
+              <button
+                onClick={handleForceSync}
+                disabled={isForceSyncing}
+                className={`flex items-center gap-1.5 ml-2 pl-3 border-l border-border group transition-colors ${isForceSyncing ? 'opacity-50 cursor-not-allowed' : 'hover:text-primary'}`}
+                title="Sincronização Forçada: limpa e recria todos os eventos visíveis (exceto gestão)"
+              >
+                <RefreshCw className={`w-3 h-3 ${isForceSyncing ? 'animate-spin' : ''}`} />
+                <span className="text-[10px] font-bold uppercase tracking-wider">Forçar Sync</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">

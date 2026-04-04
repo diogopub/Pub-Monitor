@@ -46,7 +46,7 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
       } else if (isResizing) {
         const deltaX = e.clientX - resizeStartPos.current.x;
         const deltaY = e.clientY - resizeStartPos.current.y;
-        
+
         const updates: Partial<Reminder> = {};
         if (isResizing === "right" || isResizing === "both") {
           updates.width = Math.max(100, resizeStartPos.current.w + deltaX);
@@ -103,7 +103,7 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
       }}
     >
       {/* Header / Drag Bar */}
-      <div 
+      <div
         onMouseDown={handleDragDown}
         className="h-6 flex items-center justify-between px-1 cursor-grab active:cursor-grabbing border-b border-black/10"
       >
@@ -142,16 +142,16 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
       </div>
 
       {/* Resize Handles */}
-      <div 
-        className="resize-handle absolute right-0 top-0 w-1.5 h-full cursor-ew-resize hover:bg-black/5" 
+      <div
+        className="resize-handle absolute right-0 top-0 w-1.5 h-full cursor-ew-resize hover:bg-black/5"
         onMouseDown={handleResizeDown("right")}
       />
-      <div 
-        className="resize-handle absolute bottom-0 left-0 w-full h-1.5 cursor-ns-resize hover:bg-black/5" 
+      <div
+        className="resize-handle absolute bottom-0 left-0 w-full h-1.5 cursor-ns-resize hover:bg-black/5"
         onMouseDown={handleResizeDown("bottom")}
       />
-      <div 
-        className="resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-center justify-center group" 
+      <div
+        className="resize-handle absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize flex items-center justify-center group"
         onMouseDown={handleResizeDown("both")}
       >
         <div className="w-1.5 h-1.5 rounded-full border-r border-b border-black/20 group-hover:border-black/40" />
