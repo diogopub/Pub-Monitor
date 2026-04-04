@@ -50,6 +50,19 @@ import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { isHolidayBR, entryToSlots, calcRightResize, calcLeftResize, SCHEDULE_SLOTS } from "@/lib/utils";
 
+// ─── Shared Helpers (Global) ──────────────────────────────────────
+function getMemberEmail(mId: string, members: any[]): string {
+  const member = members.find(m => m.id === mId);
+  return member?.email || "";
+}
+
+function getProjectName(projectId: string | undefined, cards: any[], customLabel?: string): string {
+  if (customLabel) return customLabel.toUpperCase();
+  if (!projectId) return "";
+  const card = cards.find(c => c.id === projectId);
+  return card?.name?.toUpperCase() || "";
+}
+
 // ─── GCal conversion helpers ─────────────────────────────────────
 // When an entry uses the new slot system, convert back to fractions for GCal.
 function toGCalDuration(entry: ScheduleEntry, overrideDuration?: number, overrideStartSlot?: number): number {
@@ -539,11 +552,19 @@ function ScheduleCell({
   date,
   isEntradaEntrega = false,
   viewMode,
+  debounceTimers,
+  syncingIds,
+  addToSyncing,
+  removeFromSyncing,
 }: {
   memberId: string;
   date: string;
   isEntradaEntrega?: boolean;
   viewMode?: "week" | "fortnight" | "month";
+  debounceTimers: React.MutableRefObject<Record<string, NodeJS.Timeout>>;
+  syncingIds: Set<string>;
+  addToSyncing: (id: string) => void;
+  removeFromSyncing: (id: string) => void;
 }) {
   const isMonth = viewMode === "month";
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
@@ -589,8 +610,8 @@ function ScheduleCell({
       return [];
     }
 
-    const memberEmail = getMemberEmail(membId);
-    const projectName = getProjectName(projectId, customLabel);
+    const memberEmail = getMemberEmail(membId, networkState.members);
+    const projectName = getProjectName(projectId, cardsState.cards, customLabel);
     if (!memberEmail) {
       toast.warning("Membro sem e-mail cadastrado. Sincronização ignorada.");
       return [];
@@ -772,7 +793,7 @@ function ScheduleCell({
 
             // Deletar antigos
             if (originalState.googleEventIds?.length) {
-              const oldEmail = getMemberEmail(originalState.memberId);
+              const oldEmail = getMemberEmail(originalState.memberId, networkState.members);
               await deleteEventsFromGoogleCalendar(originalState.googleEventIds, oldEmail || "", t).catch(e => console.warn("Clean old fail", e));
             }
 
@@ -831,7 +852,7 @@ function ScheduleCell({
 
           // Limpar antigos
           if (originalEntry.googleEventIds?.length) {
-            const oldEmail = getMemberEmail(originalEntry.memberId);
+            const oldEmail = getMemberEmail(originalEntry.memberId, networkState.members);
             await deleteEventsFromGoogleCalendar(originalEntry.googleEventIds, oldEmail || "", t).catch(e => console.warn("Clean fail", e));
           }
 
@@ -871,7 +892,7 @@ function ScheduleCell({
           toast.error("Você precisa estar logado no Google para excluir esta alocação.");
           return;
         }
-        const memberEmail = getMemberEmail(entry.memberId);
+        const memberEmail = getMemberEmail(entry.memberId, networkState.members);
         await deleteEventsFromGoogleCalendar(entry.googleEventIds, memberEmail || "", t);
       } catch (err: any) {
         if (err.message && err.message.includes("AuthError")) {
@@ -1278,19 +1299,8 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     }
   }, [viewMode]);
 
-  // ─── Shared Helpers ─────────────────────────────────────────────
-  const getMemberEmail = (mId: string): string => {
-    const member = networkState.members.find(m => m.id === mId);
-    return member?.email || "";
-  };
-
-  const getProjectName = (projectId?: string, customLabel?: string): string => {
-    if (customLabel) return customLabel.toUpperCase();
-    if (!projectId) return "";
-    const card = cardsState.cards.find(c => c.id === projectId);
-    return card?.name?.toUpperCase() || "";
-  };
-
+  // ─── Shared Helpers (local proxies) ─────────────────────────────
+  // We keep these names for easier integration with existing code in this component
   const nanoidLocal = () => Math.random().toString(36).slice(2, 10);
 
   // ─── Debounce & Lock State ──────────────────────────────────────────
@@ -1345,7 +1355,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
         // C. Re-empurrar cada uma e atualizar IDs locais
         for (const entry of memberEntriesInRange) {
-          const projectName = getProjectName(entry.projectId, entry.customLabel);
+          const projectName = getProjectName(entry.projectId, cardsState.cards, entry.customLabel);
           if (!projectName) continue;
 
           const { durationSlots, startSlot } = entryToSlots(entry);
@@ -1634,6 +1644,10 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
                           date={dateStr} 
                           isEntradaEntrega={isEntrada} 
                           viewMode={viewMode}
+                          debounceTimers={debounceTimers}
+                          syncingIds={syncingIds}
+                          addToSyncing={addToSyncing}
+                          removeFromSyncing={removeFromSyncing}
                         />
                       </td>
                     );
