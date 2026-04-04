@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useProjectCards, type TimelinePin } from "@/contexts/ProjectCardsContext";
+import { useSchedule } from "@/contexts/ScheduleContext";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, X } from "lucide-react";
 import { nanoid } from "nanoid";
 import {
@@ -24,8 +25,9 @@ const PIN_LABELS = [
   "FINAL 3D",
   "VÍDEO",
   "DESCRITIVO",
-  "APRESENTAÇÃO CLIENTE",
   "ORÇAMENTO",
+  "ENTREGA",
+  "APRESENTAÇÃO CLIENTE",
   "OUTROS",
 ];
 
@@ -98,6 +100,41 @@ export default function DailyAllocationPanel({
     return arr;
   }, [baseDate]);
 
+  const syncPinsToAgenda = (updatedPins: TimelinePin[]) => {
+    const presenters = updatedPins.filter(p => p.labels.includes("APRESENTAÇÃO CLIENTE"));
+    const agendaEntries = scheduleState.entries.filter(e => 
+      e.memberId === "sr-entradas" && 
+      e.projectId === cardId && 
+      e.activityId === "apresentacao-cliente"
+    );
+
+    // Simple 1:1 reconcile for now (assuming usually only one)
+    // If we want to support multiple:
+    presenters.forEach((pin, idx) => {
+      const entry = agendaEntries[idx];
+      if (entry) {
+        if (entry.date !== pin.date) {
+          updateEntry(entry.id, { date: pin.date });
+        }
+      } else {
+        addEntry({
+          id: nanoid(8),
+          memberId: "sr-entradas",
+          date: pin.date,
+          activityId: "apresentacao-cliente",
+          projectId: cardId,
+          duration: 8,
+          startSlot: 0
+        });
+      }
+    });
+
+    // Remove extra agenda entries
+    if (agendaEntries.length > presenters.length) {
+      agendaEntries.slice(presenters.length).forEach(e => removeEntry(e.id));
+    }
+  };
+
   // Pin handlers
   const handleAddPin = () => {
     if (readOnly) return;
@@ -109,19 +146,31 @@ export default function DailyAllocationPanel({
       color: "white",
       labels: ["ENTRADA"],
     };
-    updateCard(cardId, { timelinePins: [...timelinePins, newPin] });
+    const nextPins = [...timelinePins, newPin];
+    updateCard(cardId, { timelinePins: nextPins });
+    syncPinsToAgenda(nextPins);
   };
 
   const handleUpdatePin = (id: string, updates: Partial<TimelinePin>) => {
-    updateCard(cardId, {
-      timelinePins: timelinePins.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+    const nextPins = timelinePins.map((p) => {
+      if (p.id === id) {
+        const nextHeader = { ...p, ...updates };
+        // Se mudou pra APRESENTAÇÃO CLIENTE, força cor amarela
+        if (nextHeader.labels.includes("APRESENTAÇÃO CLIENTE")) {
+          nextHeader.color = "yellow";
+        }
+        return nextHeader;
+      }
+      return p;
     });
+    updateCard(cardId, { timelinePins: nextPins });
+    syncPinsToAgenda(nextPins);
   };
 
   const handleRemovePin = (id: string) => {
-    updateCard(cardId, {
-      timelinePins: timelinePins.filter((p) => p.id !== id),
-    });
+    const nextPins = timelinePins.filter((p) => p.id !== id);
+    updateCard(cardId, { timelinePins: nextPins });
+    syncPinsToAgenda(nextPins);
   };
 
   const handleDragEnter = (dStr: string) => {
@@ -130,12 +179,15 @@ export default function DailyAllocationPanel({
 
   const handleDragEnd = () => {
     if (draggedPinId && dropTargetDate) {
-      handleUpdatePin(draggedPinId, { date: dropTargetDate });
+      const nextPins = timelinePins.map(p => p.id === draggedPinId ? { ...p, date: dropTargetDate } : p);
+      updateCard(cardId, { timelinePins: nextPins });
+      syncPinsToAgenda(nextPins);
     }
     setDraggedPinId(null);
     setDropTargetDate(null);
   };
 
+  const { state: scheduleState, addEntry, updateEntry, removeEntry } = useSchedule();
   // Removed fixed COL_WIDTH. We'll use percentage-based widths for 15 days.
   const TIMELINE_Y = 100;
   const SIDE_PADDING = 60; // Left padding for the [+] button area
@@ -474,9 +526,9 @@ function TimelinePinElement({
 
       {/* Stick — draggable */}
       <div
-        draggable={!readOnly}
+        draggable={!readOnly && !pinLabels.includes("ENTREGA")}
         onDragStart={(e) => {
-          if (readOnly) {
+          if (readOnly || pinLabels.includes("ENTREGA")) {
             e.preventDefault();
             return;
           }
@@ -485,11 +537,11 @@ function TimelinePinElement({
         }}
         onDragEnd={(e) => { 
           e.preventDefault(); 
-          if (!readOnly) onDragEnd(); 
+          if (!readOnly && !pinLabels.includes("ENTREGA")) onDragEnd(); 
         }}
         className={cn(
           "absolute -translate-x-1/2",
-          !readOnly && "cursor-ew-resize"
+          (!readOnly && !pinLabels.includes("ENTREGA")) && "cursor-ew-resize"
         )}
         style={{
           top: `${stickTop}px`,
@@ -555,7 +607,7 @@ function TimelinePinElement({
                    <Select 
                       value={selectValue} 
                       onValueChange={(val) => { if (!readOnly) handleUpdateLabel(index, val); }}
-                      disabled={readOnly || isLabelDone}
+                      disabled={readOnly || isLabelDone || lab === "ENTREGA"}
                     >
                       <SelectTrigger className={cn(
                         "[&>svg]:hidden flex justify-center disabled:opacity-80 disabled:cursor-default",
@@ -572,7 +624,7 @@ function TimelinePinElement({
                         ))}
                       </SelectContent>
                     </Select>
-                    {!readOnly && pinLabels.length > 1 && (
+                    {!readOnly && pinLabels.length > 1 && lab !== "ENTREGA" && (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRemoveLabel(index); }}
                         className="absolute -right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-destructive opacity-0 group-hover/label:opacity-100 transition-opacity"

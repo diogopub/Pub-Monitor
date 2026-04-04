@@ -41,6 +41,7 @@ import {
   ChevronDown,
   CalendarDays,
 } from "lucide-react";
+import { nanoid } from "nanoid";
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function calcProgress(entry: string, delivery: string): number {
@@ -250,6 +251,7 @@ function AddTeamMemberForm({ cardId }: { cardId: string }) {
 export default function ProjectCard({ card }: { card: ProjectCardData }) {
   const { toggleDocument, addDocument, removeDocument, reorderDocument, updateCard, removeCard, removeFeedEntry } =
     useProjectCards();
+  const { state: scheduleState, addEntry, updateEntry, removeEntry } = useSchedule();
   const [newDocLabel, setNewDocLabel] = useState("");
   const [feedIndex, setFeedIndex] = useState(0);
   const [editingDates, setEditingDates] = useState<false | "entry" | "delivery">(false);
@@ -271,7 +273,56 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
   }, [card.name, isEditingName]);
 
   const handleSaveDates = () => {
-    updateCard(card.id, { entryDate, deliveryDate });
+    // 1. Sync Timeline Pins
+    let updatedPins = [...(card.timelinePins || [])];
+    const deliveryPinIndex = updatedPins.findIndex((p) => p.labels.includes("ENTREGA"));
+
+    if (deliveryDate) {
+      if (deliveryPinIndex !== -1) {
+        updatedPins[deliveryPinIndex] = {
+          ...updatedPins[deliveryPinIndex],
+          date: deliveryDate,
+          color: "red",
+        };
+      } else {
+        updatedPins.push({
+          id: nanoid(8),
+          date: deliveryDate,
+          color: "red",
+          labels: ["ENTREGA"],
+        });
+      }
+    } else {
+      if (deliveryPinIndex !== -1) {
+        updatedPins.splice(deliveryPinIndex, 1);
+      }
+    }
+
+    // 2. Sync Agenda (Entradas e Entregas) - sr-entradas
+    const existingAgendaEntry = scheduleState.entries.find(
+      (e) =>
+        e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "entrega-pub"
+    );
+
+    if (deliveryDate) {
+      if (existingAgendaEntry) {
+        updateEntry(existingAgendaEntry.id, { date: deliveryDate });
+      } else {
+        addEntry({
+          id: nanoid(8),
+          memberId: "sr-entradas",
+          date: deliveryDate,
+          activityId: "entrega-pub",
+          projectId: card.id,
+          duration: 8,
+          startSlot: 0,
+        });
+      }
+    } else if (existingAgendaEntry) {
+      removeEntry(existingAgendaEntry.id);
+    }
+
+    updateCard(card.id, { entryDate, deliveryDate, timelinePins: updatedPins, showInTimeline: card.showInTimeline !== false });
     setEditingDates(false);
   };
 

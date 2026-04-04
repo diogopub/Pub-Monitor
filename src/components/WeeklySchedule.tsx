@@ -568,7 +568,7 @@ function ScheduleCell({
 }) {
   const isMonth = viewMode === "month";
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
-  const { state: cardsState } = useProjectCards();
+  const { state: cardsState, updateCard } = useProjectCards();
   const { state: networkState } = useNetwork();
   const { googleAccessToken, clearGoogleToken, loginWithGoogle, ensureGoogleToken } = useAuth();
   const [open, setOpen] = useState(false);
@@ -696,6 +696,53 @@ function ScheduleCell({
     setOpen(false);
     setStep("activity");
     setSelectedActivity(null);
+
+    if (isEntradaEntrega && selectedActivity?.id === "apresentacao-cliente") {
+      reconcileAgendaWithPins(projectId);
+    }
+  };
+
+  const reconcileAgendaWithPins = (projId: string) => {
+    const card = cardsState.cards.find(c => c.id === projId);
+    if (!card) return;
+
+    // Todas as entradas de apresentação cliente deste projeto na linha de Entradas e Entregas
+    const agendaEntries = scheduleState.entries.filter(e => 
+      e.memberId === "sr-entradas" && 
+      e.projectId === projId && 
+      e.activityId === "apresentacao-cliente"
+    );
+
+    let nextPins = [...(card.timelinePins || [])];
+    const presentPins = nextPins.filter(p => p.labels.includes("APRESENTAÇÃO CLIENTE"));
+
+    // Reconciliar 1:1
+    agendaEntries.forEach((entry, idx) => {
+      const pin = presentPins[idx];
+      if (pin) {
+        if (pin.date !== entry.date) {
+          nextPins = nextPins.map(p => p.id === pin.id ? { ...p, date: entry.date, color: "yellow" as const } : p);
+        }
+      } else {
+        nextPins.push({
+          id: nanoidLocal(),
+          date: entry.date,
+          color: "yellow",
+          labels: ["APRESENTAÇÃO CLIENTE"]
+        });
+      }
+    });
+
+    // Remover pins extras
+    if (presentPins.length > agendaEntries.length) {
+      const pinsToRemoveIds = presentPins.slice(agendaEntries.length).map(p => p.id);
+      nextPins = nextPins.filter(p => !pinsToRemoveIds.includes(p.id));
+    }
+
+    // Se mudou algo, salva
+    if (JSON.stringify(nextPins) !== JSON.stringify(card.timelinePins)) {
+      updateCard(projId, { timelinePins: nextPins });
+    }
   };
 
   // ─── Cálculo de Altura Dinâmica ────────────────────────────────
@@ -809,6 +856,10 @@ function ScheduleCell({
           }
         }, 500);
       }
+
+      if (isEntradaEntrega && sourceEntry.activityId === "apresentacao-cliente" && sourceEntry.projectId) {
+        reconcileAgendaWithPins(sourceEntry.projectId);
+      }
     } catch (err) {
       console.error("Failed to parse drop target", err);
     }
@@ -873,6 +924,10 @@ function ScheduleCell({
     } else {
       updateEntry(entryId, updates);
     }
+
+    if (isEntradaEntrega && entry.activityId === "apresentacao-cliente" && entry.projectId) {
+      reconcileAgendaWithPins(entry.projectId);
+    }
   };
 
   // 4. DELETAR
@@ -908,6 +963,10 @@ function ScheduleCell({
 
     // Exclusão local segura
     removeEntry(entryId);
+    
+    if (isEntradaEntrega && entry.activityId === "apresentacao-cliente" && entry.projectId) {
+      setTimeout(() => reconcileAgendaWithPins(entry.projectId!), 100);
+    }
   };
 
   const handleClose = () => {
