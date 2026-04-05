@@ -75,7 +75,7 @@ export interface ProjectCardsState {
 
 interface ProjectCardsContextType {
   state: ProjectCardsState;
-  addCard: (data: Omit<ProjectCardData, "id" | "documents" | "feed">) => void;
+  addCard: (data: Omit<ProjectCardData, "documents" | "feed"> & { id?: string }) => void;
   updateCard: (id: string, updates: Partial<Omit<ProjectCardData, "id">>) => void;
   removeCard: (id: string) => void;
   toggleDocument: (cardId: string, docId: string) => void;
@@ -166,8 +166,14 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
   }, [user]);
 
   // Operations
-  const addCard = useCallback((data: Omit<ProjectCardData, "id" | "documents" | "feed">) => {
-    const newCard: ProjectCardData = { ...data, id: nanoid(8), documents: [], feed: [] };
+  const addCard = useCallback((data: Omit<ProjectCardData, "documents" | "feed"> & { id?: string }) => {
+    const newCard: ProjectCardData = { 
+      ...data, 
+      id: data.id || nanoid(8), 
+      documents: [], 
+      feed: [],
+      timelinePins: data.timelinePins || []
+    };
     setStateInternal(prev => {
       const next = { ...prev, cards: [...prev.cards, newCard] };
       saveLocalState(next);

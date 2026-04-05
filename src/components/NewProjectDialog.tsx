@@ -3,7 +3,7 @@
  */
 import { useState } from "react";
 import { nanoid } from "nanoid";
-import { useProjectCards } from "@/contexts/ProjectCardsContext";
+import { useProjectCards, type TimelinePin } from "@/contexts/ProjectCardsContext";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useSchedule } from "@/contexts/ScheduleContext";
 import {
@@ -53,7 +53,7 @@ export default function NewProjectDialog({
 }) {
   const { addCard } = useProjectCards();
   const { state: networkState } = useNetwork();
-  const { getWeekRoster } = useSchedule();
+  const { getWeekRoster, addEntry } = useSchedule();
   const [name, setName] = useState("");
   const [client, setClient] = useState("");
   const [entryDate, setEntryDate] = useState("");
@@ -72,12 +72,36 @@ export default function NewProjectDialog({
       .filter((s) => s.name)
       .map((s) => ({ id: nanoid(8), role: s.role, name: s.name }));
 
+    const cardId = nanoid(8);
+    const pins: TimelinePin[] = [];
+    if (deliveryDate) {
+      pins.push({
+        id: nanoid(8),
+        date: deliveryDate,
+        color: "red" as const,
+        labels: ["ENTREGA"],
+      });
+      
+      addEntry({
+        id: nanoid(8),
+        memberId: "sr-entradas",
+        date: deliveryDate,
+        activityId: "entrega-pub",
+        projectId: cardId,
+        duration: 8,
+        startSlot: 0
+      });
+    }
+
     addCard({
+      id: cardId,
       name: name.trim().toUpperCase(),
       client: client.trim(),
       entryDate,
       deliveryDate,
       team,
+      timelinePins: pins,
+      showInTimeline: true
     });
 
     // Reset
