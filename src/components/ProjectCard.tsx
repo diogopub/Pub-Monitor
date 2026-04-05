@@ -272,22 +272,33 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     if (!isEditingName) setEditedName(card.name);
   }, [card.name, isEditingName]);
 
-  const handleSaveDates = () => {
+  // Sincronizar estados locais quando as props mudam (ex: vindo de outro componente ou sync externo)
+  useEffect(() => {
+    if (editingDates === false) {
+      setEntryDate(card.entryDate || "");
+      setDeliveryDate(card.deliveryDate || "");
+    }
+  }, [card.entryDate, card.deliveryDate, editingDates]);
+
+  const handleSaveDates = (newEntryDate?: string, newDeliveryDate?: string) => {
+    const finalEntryDate = newEntryDate !== undefined ? newEntryDate : entryDate;
+    const finalDeliveryDate = newDeliveryDate !== undefined ? newDeliveryDate : deliveryDate;
+
     // 1. Sync Timeline Pins
     let updatedPins = [...(card.timelinePins || [])];
     const deliveryPinIndex = updatedPins.findIndex((p) => p.labels.includes("ENTREGA"));
 
-    if (deliveryDate) {
+    if (finalDeliveryDate) {
       if (deliveryPinIndex !== -1) {
         updatedPins[deliveryPinIndex] = {
           ...updatedPins[deliveryPinIndex],
-          date: deliveryDate,
+          date: finalDeliveryDate,
           color: "red",
         };
       } else {
         updatedPins.push({
           id: nanoid(8),
-          date: deliveryDate,
+          date: finalDeliveryDate,
           color: "red",
           labels: ["ENTREGA"],
         });
@@ -299,19 +310,19 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     }
 
     // 2. Sync Agenda (Entradas e Entregas) - sr-entradas
-    const existingAgendaEntry = scheduleState.entries.find(
+    const existingAgendaEntry = (scheduleState.entries || []).find(
       (e) =>
         e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "entrega-pub"
     );
 
-    if (deliveryDate) {
+    if (finalDeliveryDate) {
       if (existingAgendaEntry) {
-        updateEntry(existingAgendaEntry.id, { date: deliveryDate });
+        updateEntry(existingAgendaEntry.id, { date: finalDeliveryDate });
       } else {
         addEntry({
           id: nanoid(8),
           memberId: "sr-entradas",
-          date: deliveryDate,
+          date: finalDeliveryDate,
           activityId: "entrega-pub",
           projectId: card.id,
           duration: 8,
@@ -322,7 +333,12 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       removeEntry(existingAgendaEntry.id);
     }
 
-    updateCard(card.id, { entryDate, deliveryDate, timelinePins: updatedPins, showInTimeline: card.showInTimeline !== false });
+    updateCard(card.id, { 
+      entryDate: finalEntryDate, 
+      deliveryDate: finalDeliveryDate, 
+      timelinePins: updatedPins, 
+      showInTimeline: card.showInTimeline !== false 
+    });
     setEditingDates(false);
   };
 
@@ -457,7 +473,11 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   type="date"
                   value={entryDate}
                   onChange={(e) => setEntryDate(e.target.value)}
-                  onBlur={() => { handleSaveDates(); setEditingDates(false); }}
+                  onBlur={() => handleSaveDates()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveDates();
+                    if (e.key === "Escape") setEditingDates(false);
+                  }}
                   className="h-6 text-[10px] w-28"
                   autoFocus
                 />
@@ -480,7 +500,11 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   type="date"
                   value={deliveryDate}
                   onChange={(e) => setDeliveryDate(e.target.value)}
-                  onBlur={() => { handleSaveDates(); setEditingDates(false); }}
+                  onBlur={() => handleSaveDates()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveDates();
+                    if (e.key === "Escape") setEditingDates(false);
+                  }}
                   className="h-6 text-[10px] w-28"
                   autoFocus
                 />
