@@ -186,18 +186,31 @@ export default function NetworkGraph({
       const isPM = now.getHours() >= 14;
       
       // Filter entries that are active in the current period of today
+      const SLOTS_PER_DAY = 8;
       const todayEntries = scheduleState.entries.filter(e => {
         if (!e.projectId) return false;
         
         const startDate = new Date(e.date + "T12:00:00");
         const diffDays = Math.floor((todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
         
-        // If today is outside the range [start, start + duration)
-        if (diffDays < 0 || diffDays >= (e.duration || 1)) return false;
+        // New slot system stores duration in slots (1–8 = up to 1 day).
+        // Old system stores duration as day fractions (0.5 = half day, 1.0 = full day).
+        // Convert to days for a correct range comparison.
+        const isNewSlotSystem = e.startSlot !== undefined;
+        const durationInDays = isNewSlotSystem
+          ? (e.duration || 1) / SLOTS_PER_DAY
+          : (e.duration || 1);
 
-        // Calculate entry's relative interval for today [entryDayStart, entryDayEnd]
-        const entryDayStart = diffDays === 0 ? (e.startOffset || 0) : 0;
-        const entryDayEnd = entryDayStart + ((e.duration || 1) - diffDays);
+        // If today is outside the range [start, start + durationInDays)
+        if (diffDays < 0 || diffDays >= durationInDays) return false;
+
+        // Calculate entry's relative interval for today as a fraction of the day [0, 1]
+        // startOffset for new system = startSlot / SLOTS_PER_DAY; old system uses startOffset directly
+        const startFraction = isNewSlotSystem
+          ? (e.startSlot! / SLOTS_PER_DAY)
+          : (e.startOffset || 0);
+        const entryDayStart = diffDays === 0 ? startFraction : 0;
+        const entryDayEnd = entryDayStart + (durationInDays - diffDays);
 
         if (isPM) {
           return entryDayEnd > 0.5;
