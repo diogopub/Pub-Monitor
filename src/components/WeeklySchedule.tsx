@@ -48,7 +48,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { isHolidayBR, entryToSlots, calcRightResize, calcLeftResize, SCHEDULE_SLOTS } from "@/lib/utils";
+import { cn, isHolidayBR, entryToSlots, calcRightResize, calcLeftResize, SCHEDULE_SLOTS } from "@/lib/utils";
 
 // ─── Shared Helpers (Global) ──────────────────────────────────────
 function getMemberEmail(mId: string, members: any[]): string {
@@ -1498,6 +1498,50 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
   const goToToday = () => setCurrentMonday(getMonday(new Date()));
 
   const today = formatDate(new Date());
+  
+  // ─── Panning Logic ─────────────────────────────────────────────
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Prevent panning when clicking tasks, buttons, or popovers
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("button") || 
+      target.closest("input") || 
+      target.closest("[role='dialog']") ||
+      target.closest(".group\\/bar") || // TaskBar
+      target.closest(".popover-content")
+    ) return;
+
+    setIsDragging(true);
+    setStartX(e.pageX);
+    document.body.style.cursor = "grabbing";
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+
+    const x = e.pageX;
+    const walk = startX - x;
+    
+    // Sensitivity: how many pixels mouse moves to shift one unit (week/month)
+    const threshold = 120; 
+
+    if (Math.abs(walk) > threshold) {
+      // Determine jump size based on viewMode
+      const jumpDays = viewMode === "month" ? 30 : (viewMode === "fortnight" ? 14 : 7);
+      const direction = walk > 0 ? 1 : -1;
+      
+      setCurrentMonday(prev => addDays(prev, direction * jumpDays));
+      setStartX(x); // Reset to allow continuous dragging
+    }
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+    document.body.style.cursor = "default";
+  };
 
   // Master member list (all members defined in NetworkContext)
   const allMemberIds = useMemo(() => networkState.members.map((m) => m.id), [networkState.members]);
@@ -1597,7 +1641,16 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       </div>
 
       {/* Grid */}
-      <div className={`overflow-x-auto ${viewMode === "month" || viewMode === "fortnight" ? "" : ""}`}>
+      <div 
+        className={cn(
+          "overflow-x-auto select-none",
+          !isDragging ? "cursor-grab" : "cursor-grabbing"
+        )}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUpOrLeave}
+        onMouseLeave={handleMouseUpOrLeave}
+      >
         <table className={`w-full border-collapse ${viewMode === "month" || viewMode === "fortnight" ? "min-w-0" : "min-w-[700px]"}`}>
           <thead>
             <tr>

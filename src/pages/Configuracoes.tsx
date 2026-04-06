@@ -346,7 +346,7 @@ function BackupSettingsSection() {
           <div className="space-y-0.5">
             <h3 className="text-sm font-bold text-foreground">Backup Automático</h3>
             <p className="text-xs text-muted-foreground">
-              Enviar dados para o Google Drive diariamente às 12:00 e 20:00.
+              Enviar dados para o Google Drive diariamente às 12:00 e 18:00.
             </p>
           </div>
           <Switch

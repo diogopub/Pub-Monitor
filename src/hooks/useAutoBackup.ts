@@ -51,17 +51,17 @@ export function useAutoBackup() {
       // Optional: clear on error if we want to retry within the same minute? 
       // Better to stay safe and wait for next trigger or manual.
     }
-  }, [networkState, scheduleState, cardsState, googleAppsScriptUrl]);
+  }, [googleAppsScriptUrl, networkState, scheduleState, cardsState]);
 
+  // Separate timer from state to prevent interval spamming on re-renders
   useEffect(() => {
     if (!autoBackupEnabled || !googleAppsScriptUrl) return;
 
-    const checkTime = () => {
+    const interval = setInterval(() => {
       const now = new Date();
       const hours = now.getHours();
       const minutes = now.getMinutes();
 
-      // Updated Slots: 12:00 and 18:00
       const slots = [
         { hour: 12, min: 0, label: "12h" },
         { hour: 18, min: 0, label: "18h" }
@@ -72,11 +72,8 @@ export function useAutoBackup() {
           performBackup(slot.label);
         }
       });
-    };
-
-    const interval = setInterval(checkTime, 30000); // Check more frequently but performBackup has the guard
-    checkTime();
+    }, 60000); // Check once per minute
 
     return () => clearInterval(interval);
-  }, [autoBackupEnabled, googleAppsScriptUrl, performBackup]);
+  }, [autoBackupEnabled, googleAppsScriptUrl, performBackup]); // performBackup still here but now interval is much slower
 }
