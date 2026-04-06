@@ -49,10 +49,10 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
 
         const updates: Partial<Reminder> = {};
         if (isResizing === "right" || isResizing === "both") {
-          updates.width = Math.max(100, resizeStartPos.current.w + deltaX);
+          updates.width = Math.max(60, resizeStartPos.current.w + deltaX);
         }
         if (isResizing === "bottom" || isResizing === "both") {
-          updates.height = Math.max(100, resizeStartPos.current.h + deltaY);
+          updates.height = Math.max(40, resizeStartPos.current.h + deltaY);
         }
         updateReminder(reminder.id, updates);
       }
@@ -105,7 +105,7 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
       {/* Header / Drag Bar */}
       <div
         onMouseDown={handleDragDown}
-        className="h-6 flex items-center justify-between px-1 cursor-grab active:cursor-grabbing border-b border-black/10"
+        className="h-5 flex items-center justify-between px-1 cursor-grab active:cursor-grabbing border-b border-black/5 shrink-0"
       >
         <GripVertical className="w-3 h-3 text-black/20" />
         <div className="flex items-center gap-1">
@@ -130,13 +130,13 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 p-2 flex overflow-hidden">
+      <div className="flex-1 p-1 flex overflow-hidden">
         <textarea
           value={text}
           onChange={handleTextChange}
           onBlur={handleBlur}
           placeholder="Lembrete..."
-          className="w-full h-full bg-transparent border-none resize-none focus:outline-none focus:ring-0 text-sm font-medium text-black/80 placeholder:text-black/20 leading-tight"
+          className="w-full h-full bg-transparent border-none resize-none focus:outline-none focus:ring-0 text-[11px] font-medium text-black/80 placeholder:text-black/20 leading-tight"
           style={{ fontFamily: "'Sora', sans-serif" }}
         />
       </div>
