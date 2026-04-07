@@ -304,6 +304,9 @@ function TimelineRow({
                 className={`flex-1 border-l border-white/5 relative
                   ${isOffDay ? "bg-white/[0.02]" : ""}
                   ${isToday ? "bg-primary/5" : ""}`}
+                data-sticky-anchor="timeline"
+                data-date={formatISO(d)}
+                data-ref={card.id}
               >
                 {/* Day header */}
                 <div className={`absolute top-2 w-full text-center text-[9px] font-mono select-none pointer-events-none leading-tight
@@ -386,6 +389,8 @@ function TimelineRow({
                   boxShadow: `0 0 6px ${effectiveColor}88`,
                 }}
                 title={pinTooltip}
+                data-sticky-anchor="timeline-pin"
+                data-ref={pin.id}
               />
 
               {/* Pin stick */}

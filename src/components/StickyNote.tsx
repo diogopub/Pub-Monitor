@@ -11,17 +11,59 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
   const resizeStartPos = useRef({ x: 0, y: 0, w: 0, h: 0 });
   const [text, setText] = useState(reminder.text);
 
+  const [computedPos, setComputedPos] = useState<{ x: number, y: number, hidden: boolean } | null>(null);
+
   // Sync internal text state with external reminder text
   useEffect(() => {
     setText(reminder.text);
   }, [reminder.text]);
 
+  useEffect(() => {
+    if (!reminder.attachedTo) {
+      setComputedPos(null);
+      return;
+    }
+
+    const { type, date, refId, offsetX, offsetY } = reminder.attachedTo;
+    
+    const updatePosition = () => {
+      let selector = `[data-sticky-anchor="${type}"]`;
+      if (date) selector += `[data-date="${date}"]`;
+      if (refId) selector += `[data-ref="${refId}"]`;
+
+      const target = document.querySelector(selector) as HTMLElement;
+      if (!target) {
+        setComputedPos({ x: 0, y: 0, hidden: true });
+        return;
+      }
+
+      const container = document.getElementById("main-scroll-container");
+      if (!container) return;
+
+      const targetRect = target.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+
+      const x = (targetRect.left - containerRect.left) + container.scrollLeft + offsetX;
+      const y = (targetRect.top - containerRect.top) + container.scrollTop + offsetY;
+
+      setComputedPos(prev => prev && prev.x === x && prev.y === y && prev.hidden === false ? prev : { x, y, hidden: false });
+    };
+
+    updatePosition();
+    const interval = setInterval(updatePosition, 100);
+    return () => clearInterval(interval);
+  }, [reminder.attachedTo]);
+
   const handleDragDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === "TEXTAREA" || (e.target as HTMLElement).closest(".resize-handle")) return;
     setIsDragging(true);
+    
+    const startX = computedPos && !computedPos.hidden ? computedPos.x : reminder.x;
+    const startY = computedPos && !computedPos.hidden ? computedPos.y : reminder.y;
+    
     dragStartPos.current = {
-      x: e.clientX - reminder.x,
-      y: e.clientY - reminder.y,
+      x: e.clientX - startX,
+      y: e.clientY - startY,
     };
   };
 
@@ -58,7 +100,34 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (isDragging) {
+        const els = document.elementsFromPoint(e.clientX, e.clientY);
+        const anchor = els.find(el => el.hasAttribute("data-sticky-anchor"));
+
+        if (anchor) {
+          const rect = anchor.getBoundingClientRect();
+          const container = document.getElementById("main-scroll-container");
+          if (container) {
+            const containerRect = container.getBoundingClientRect();
+            const targetLeft = rect.left - containerRect.left + container.scrollLeft;
+            const targetTop = rect.top - containerRect.top + container.scrollTop;
+            
+            updateReminder(reminder.id, {
+              attachedTo: {
+                type: anchor.getAttribute("data-sticky-anchor") || "",
+                date: anchor.getAttribute("data-date") || undefined,
+                refId: anchor.getAttribute("data-ref") || undefined,
+                offsetX: reminder.x - targetLeft,
+                offsetY: reminder.y - targetTop,
+              }
+            });
+          }
+        } else {
+          // Clear attachment if dropped outside ANY anchor
+          updateReminder(reminder.id, { attachedTo: null as any });
+        }
+      }
       setIsDragging(false);
       setIsResizing(null);
     };
@@ -86,6 +155,12 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
 
   const currentColor = POST_IT_COLORS.find(c => c.bg === reminder.color) || POST_IT_COLORS[0];
 
+  const finalX = isDragging || !computedPos ? reminder.x : computedPos.x;
+  const finalY = isDragging || !computedPos ? reminder.y : computedPos.y;
+  const hidden = !isDragging && computedPos && computedPos.hidden;
+
+  if (hidden) return null;
+
   return (
     <div
       className={cn(
@@ -94,8 +169,8 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
         isResizing && "shadow-2xl"
       )}
       style={{
-        left: reminder.x,
-        top: reminder.y,
+        left: finalX,
+        top: finalY,
         width: reminder.width,
         height: reminder.height,
         backgroundColor: reminder.color,

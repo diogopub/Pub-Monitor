@@ -758,34 +758,31 @@ function ScheduleCell({
       if (!dataStr) return;
       const data = JSON.parse(dataStr);
 
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const colWidth = rect.width;
-      
-      const slotWidth = colWidth / SCHEDULE_SLOTS;
-      const targetStartSlot = Math.max(0, Math.min(Math.round((x / slotWidth) - (data.grabSlotOffset || 0)), SCHEDULE_SLOTS - 1));
-      const targetStartOffset = targetStartSlot / SCHEDULE_SLOTS;
+      const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
+      if (!sourceEntry) return;
 
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       const y = e.clientY - rect.top;
       // Removido o cap de Math.min(2, ...) para permitir crescimento dinâmico da linha
       let targetRowIndex = Math.max(0, Math.floor(y / 22));
 
+      // Mantém a exata quantidade de horas e a posição (start time) independente de onde solta o mouse
+      const { startSlot: originalStartSlot, durationSlots: originalDurationSlots } = entryToSlots(sourceEntry);
+      
+      const targetStartSlot = originalStartSlot;
+      const targetStartOffset = originalStartSlot / SCHEDULE_SLOTS;
+      const newDurationSlots = originalDurationSlots;
+      const targetDurationOffset = newDurationSlots / SCHEDULE_SLOTS;
+
       const isCopy = e.altKey;
       const isDifferentPos = data.sourceMemberId !== memberId || data.sourceDate !== date ||
-        data.sourceSlot !== targetRowIndex || data.sourceOffset !== targetStartOffset;
+        data.sourceSlot !== targetRowIndex;
 
       if (!data.entryId || (!isDifferentPos && !isCopy)) return;
-
-      const sourceEntry = scheduleState.entries.find(en => en.id === data.entryId);
-      if (!sourceEntry) return;
 
       if ((isPastDate(data.sourceDate) || isPastDate(date)) && !window.confirm("Atenção: você está movendo/editando uma alocação de um dia que já passou. Deseja continuar?")) {
         return;
       }
-
-      const { durationSlots } = entryToSlots(sourceEntry);
-      const newDurationSlots = Math.min(durationSlots, SCHEDULE_SLOTS - targetStartSlot);
-      const targetDurationOffset = newDurationSlots / SCHEDULE_SLOTS;
 
       if (isCopy) {
         const newId = nanoidLocal();
@@ -990,6 +987,9 @@ function ScheduleCell({
           style={{ height: `${dynamicHeight}px` }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
+          data-sticky-anchor="agenda"
+          data-date={date}
+          data-ref={memberId}
         >
           {entries.map((entry) => {
             const allActs = isEntradaEntrega ? ENTRADAS_ACTIVITIES : ACTIVITY_TYPES;

@@ -19,6 +19,13 @@ export interface Reminder {
   width: number;
   height: number;
   createdAt: number;
+  attachedTo?: {
+    type: string;
+    date?: string;
+    refId?: string;
+    offsetX: number;
+    offsetY: number;
+  } | null;
 }
 
 interface RemindersContextType {
