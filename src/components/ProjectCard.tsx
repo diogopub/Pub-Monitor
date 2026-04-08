@@ -249,10 +249,9 @@ function AddTeamMemberForm({ cardId }: { cardId: string }) {
 
 
 export default function ProjectCard({ card }: { card: ProjectCardData }) {
-  const { toggleDocument, addDocument, removeDocument, reorderDocument, updateCard, removeCard, removeFeedEntry } =
+  const { updateCard, removeCard, removeFeedEntry } =
     useProjectCards();
   const { state: scheduleState, addEntry, updateEntry, removeEntry } = useSchedule();
-  const [newDocLabel, setNewDocLabel] = useState("");
   const [feedIndex, setFeedIndex] = useState(0);
   const [editingDates, setEditingDates] = useState<false | "entry" | "delivery">(false);
   const [entryDate, setEntryDate] = useState(card.entryDate);
@@ -640,79 +639,6 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
         </div>
       </div>
 
-      {/* Documentos */}
-      <div className="px-3 py-2">
-        <div className="space-y-1">
-          {card.documents.map((doc, idx) => (
-            <div key={doc.id} className="flex items-center gap-1 group/doc">
-              <div className="flex flex-col">
-                <button
-                  onClick={() => reorderDocument(card.id, doc.id, "up")}
-                  disabled={idx === 0}
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-20 leading-none"
-                >
-                  <ChevronUp className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={() => reorderDocument(card.id, doc.id, "down")}
-                  disabled={idx === card.documents.length - 1}
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-20 leading-none"
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-              </div>
-              <span className={`text-[10px] font-semibold flex-1 ${doc.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>
-                {doc.label}
-              </span>
-              {!readOnly && (
-                <button
-                  onClick={() => removeDocument(card.id, doc.id)}
-                  className="opacity-0 group-hover/doc:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-              <Switch
-                checked={doc.enabled}
-                onCheckedChange={() => toggleDocument(card.id, doc.id)}
-                disabled={readOnly}
-                className="scale-75 data-[state=unchecked]:!bg-red-600 data-[state=unchecked]:!border-red-600 data-[state=checked]:!bg-green-600 data-[state=checked]:!border-green-600 [&_[data-slot=switch-thumb]]:!bg-white"
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Add document */}
-        {!readOnly && (
-          <div className="flex items-center gap-1 mt-2">
-            <Input
-              placeholder="Novo documento"
-              value={newDocLabel}
-              onChange={(e) => setNewDocLabel(e.target.value)}
-              className="h-6 text-[10px] flex-1"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newDocLabel.trim()) {
-                  addDocument(card.id, newDocLabel.trim().toUpperCase());
-                  setNewDocLabel("");
-                }
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-6 w-6"
-              onClick={() => {
-                if (newDocLabel.trim()) {
-                  addDocument(card.id, newDocLabel.trim().toUpperCase());
-                  setNewDocLabel("");
-                }
-              }}
-            >
-              <Plus className="w-3 h-3" />
-            </Button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

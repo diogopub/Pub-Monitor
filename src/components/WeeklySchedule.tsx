@@ -38,7 +38,6 @@ import {
   X,
   Search,
   Trash2,
-  Calendar as CalendarIcon,
   ChevronUp,
   ChevronDown,
   UserX,
@@ -1637,9 +1636,12 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
           </p>
         </div>
 
-        <Button variant="outline" size="sm" className="text-xs flex-shrink-0" onClick={goToToday}>
-          <CalendarIcon className="w-3.5 h-3.5" />
-        </Button>
+        <button
+          onClick={(e) => { e.stopPropagation(); goToToday(); }}
+          className="text-[10px] bg-primary/20 hover:bg-primary/30 border border-primary/20 px-3 py-1 rounded text-primary transition-colors font-bold uppercase tracking-wider"
+        >
+          Hoje
+        </button>
       </div>
 
       {/* Grid */}

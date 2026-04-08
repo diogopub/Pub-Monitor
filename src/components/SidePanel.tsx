@@ -39,11 +39,19 @@ const WEEKDAYS = [
   "SÁBADO"
 ];
 
+function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+}
+
 export default function SidePanel({
   collapsed,
   onToggle,
 }: SidePanelProps) {
-  const { state: cardsState, updateCard } = useProjectCards();
+  const { state: cardsState, updateCard, addFeedEntry } = useProjectCards();
   const { currentUserRole } = usePermissions();
   const { user } = useAuth();
   const readOnly = currentUserRole === "viewer";
@@ -54,13 +62,13 @@ export default function SidePanel({
   today.setHours(0, 0, 0, 0);
 
   const groupedPins = useMemo(() => {
+    // ... logic stays same
     const groups: Record<
       string,
       { dateObj: Date; projects: Record<string, { cardName: string; pins: TimelinePin[] }> }
     > = {};
 
     cardsState.cards.forEach((card) => {
-      // Ignore inactive projects and PUB INTERNO as it doesn't represent real milestones
       if (card.active === false || card.name === "PUB INTERNO") return;
       if (!card.timelinePins) return;
 
@@ -71,7 +79,6 @@ export default function SidePanel({
         const diffTime = pinDate.getTime() - today.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-        // Group past pins as "Atrasados" or just show today + future
         if (diffDays >= 0 && diffDays <= 14) {
           if (!groups[pin.date]) {
             groups[pin.date] = { dateObj: pinDate, projects: {} };
@@ -89,23 +96,33 @@ export default function SidePanel({
 
   const sortedDates = Object.keys(groupedPins).sort((a, b) => a.localeCompare(b));
 
-  const handleToggleLabel = (cardId: string, pinId: string, labelIndex: number, currentStatus: boolean) => {
+  const handleToggleLabel = (cardId: string, pinId: string, labelIndex: number, currentStatus: boolean, pinLabel: string) => {
     // Permission: all roles (admin, editor, viewer) can toggle checks per user request
 
     const card = cardsState.cards.find((c) => c.id === cardId);
     if (!card || !card.timelinePins) return;
 
+    const newStatus = !currentStatus;
+    const now = new Date();
+
     const newPins = card.timelinePins.map((p) => {
       if (p.id !== pinId) return p;
       const completedLabels = p.completedLabels ? [...p.completedLabels] : new Array(p.labels.length).fill(false);
       const completedBy = p.completedBy ? [...p.completedBy] : new Array(p.labels.length).fill(null);
-      const newStatus = !currentStatus;
       completedLabels[labelIndex] = newStatus;
       completedBy[labelIndex] = newStatus ? currentUserFirstName : null;
       return { ...p, completedLabels, completedBy };
     });
 
     updateCard(cardId, { timelinePins: newPins });
+
+    // Se marcou como feito, adiciona ao feed
+    if (newStatus) {
+      const timeStr = formatTime(now);
+      const dateStr = now.toLocaleDateString("pt-BR");
+      const displayLabel = pinLabel || "ENTRADA";
+      addFeedEntry(cardId, `CONCLUÍDO: ${displayLabel} do projeto ${card.name} às ${timeStr} de ${dateStr}`);
+    }
   };
 
   const getDayLabel = (dateObj: Date) => {
@@ -224,7 +241,7 @@ export default function SidePanel({
                                             id={uid}
                                             checked={isCompleted}
                                             onCheckedChange={() =>
-                                              handleToggleLabel(cardId, pin.id, idx, isCompleted)
+                                              handleToggleLabel(cardId, pin.id, idx, isCompleted, displayLabel)
                                             }
                                             disabled={false} // Todos os papéis podem marcar conforme pedido
                                             className="mt-0.5 w-[14px] h-[14px] rounded-[3px] border-muted-foreground/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all disabled:opacity-50 disabled:cursor-default"

@@ -211,7 +211,6 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
 
   const toggleDocument = useCallback((cardId: string, docId: string) => {
     let updatedDocs: ProjectDocument[] | null = null;
-    let updatedFeed: FeedEntry[] | null = null;
 
     setStateInternal(prev => {
       const card = prev.cards.find(c => c.id === cardId);
@@ -222,8 +221,6 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
 
       const newEnabled = !d.enabled;
       const now = new Date();
-      const timeStr = formatTime(now);
-      const dateStr = now.toLocaleDateString("pt-BR");
 
       updatedDocs = card.documents.map(doc => doc.id === docId ? { 
         ...doc, 
@@ -231,20 +228,15 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
         sentAt: newEnabled ? now.toISOString() : undefined 
       } : doc);
 
-      updatedFeed = newEnabled 
-        ? [{ id: nanoid(8), message: `${d.label} de ${card.name} enviado às ${timeStr} de ${dateStr}`, timestamp: now.toISOString() }, ...card.feed] 
-        : card.feed;
-
-      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, documents: updatedDocs!, feed: updatedFeed! } : c);
+      const nextCards = prev.cards.map(c => c.id === cardId ? { ...c, documents: updatedDocs! } : c);
       const next = { ...prev, cards: nextCards };
       saveLocalState(next);
       return next;
     });
 
-    if (canWrite && updatedDocs && updatedFeed) {
+    if (canWrite && updatedDocs) {
       updateDoc(doc(db, CARDS_COLLECTION, cardId), { 
-        documents: sanitizeForFirestore(updatedDocs), 
-        feed: sanitizeForFirestore(updatedFeed) 
+        documents: sanitizeForFirestore(updatedDocs)
       }).catch(console.error);
     }
   }, [canWrite]);
