@@ -1525,16 +1525,18 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     const x = e.pageX;
     const walk = startX - x;
     
-    // Sensitivity: how many pixels mouse moves to shift one unit (week/month)
-    const threshold = 120; 
+    // Sensitivity: how many pixels mouse moves to shift unit
+    const threshold = 80; 
 
     if (Math.abs(walk) > threshold) {
-      // Determine jump size based on viewMode
-      const jumpDays = viewMode === "month" ? 30 : (viewMode === "fortnight" ? 14 : 7);
-      const direction = walk > 0 ? 1 : -1;
+      // Calculate how many days to shift based on walk distance
+      const daysToShift = Math.floor(walk / threshold);
       
-      setCurrentMonday(prev => addDays(prev, direction * jumpDays));
-      setStartX(x); // Reset to allow continuous dragging
+      if (daysToShift !== 0) {
+        // Shift one day at a time for each threshold unit
+        setCurrentMonday(prev => addDays(prev, daysToShift));
+        setStartX(x); // Reset to allow continuous dragging
+      }
     }
   };
 

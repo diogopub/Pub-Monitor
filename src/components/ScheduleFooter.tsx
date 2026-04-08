@@ -83,6 +83,33 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
   const { state: cardsState } = useProjectCards();
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
   const [expanded, setExpanded] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    setIsDragging(true);
+    setStartX(e.pageX);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const x = e.pageX;
+    const walk = startX - x;
+    const threshold = 80;
+
+    if (Math.abs(walk) > threshold) {
+      const daysToShift = Math.floor(walk / threshold);
+      if (daysToShift !== 0) {
+        setCurrentMonday(prev => addDays(prev, daysToShift));
+        setStartX(x);
+      }
+    }
+  };
+
+  const handleMouseUpOrLeave = () => {
+    setIsDragging(false);
+  };
 
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i)),
@@ -131,7 +158,13 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
       </button>
 
       {expanded && (
-        <div className="bg-black/15 backdrop-blur-md border-t border-white/5">
+        <div 
+          className="bg-black/15 backdrop-blur-md border-t border-white/5 select-none cursor-grab active:cursor-grabbing"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUpOrLeave}
+          onMouseLeave={handleMouseUpOrLeave}
+        >
           {activeCard ? (
             /* ─── Diárias panel for active project ─── */
             <div className="p-1 w-full max-h-[50vh] overflow-y-auto">

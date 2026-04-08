@@ -80,6 +80,38 @@ export default function DailyAllocationPanel({
 
   const [draggedPinId, setDraggedPinId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Neuter drag if clicking buttons, select, or inputs
+    if ((e.target as HTMLElement).closest("button") || 
+        (e.target as HTMLElement).closest("select") || 
+        (e.target as HTMLElement).closest("input") ||
+        (e.target as HTMLElement).closest(".group\\/pin")) return;
+    
+    setIsDragging(true);
+    setStartX(e.pageX);
+  };
+
+  const handleMouseMoveNavigation = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const x = e.pageX;
+    const walk = startX - x;
+    const threshold = 80;
+
+    if (Math.abs(walk) > threshold) {
+      const daysToShift = Math.floor(walk / threshold);
+      if (daysToShift !== 0) {
+        setBaseDate(prev => addDays(prev, daysToShift));
+        setStartX(x);
+      }
+    }
+  };
+
+  const handleMouseUpOrLeaveNavigation = () => {
+    setIsDragging(false);
+  };
 
   // View control: baseDate is the leftmost day in the window
   const [baseDate, setBaseDate] = useState(() => {
@@ -265,11 +297,14 @@ export default function DailyAllocationPanel({
         </button>
       </div>
 
-      {/* Timeline area */}
       <div className="flex-1 overflow-hidden">
         <div
-          className="relative w-full h-full"
+          className="relative w-full h-full select-none cursor-grab active:cursor-grabbing"
           style={{ minHeight: "180px" }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMoveNavigation}
+          onMouseUp={handleMouseUpOrLeaveNavigation}
+          onMouseLeave={handleMouseUpOrLeaveNavigation}
         >
           {/* Day Columns, Backgrounds, and Grid */}
           <div className="absolute inset-0 flex" style={{ paddingLeft: `${SIDE_PADDING}px` }}>
