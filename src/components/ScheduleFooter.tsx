@@ -165,7 +165,15 @@ export default function ScheduleFooter({
       }));
   }, [scheduleState.specialRows]);
 
-  const rows = useMemo(() => [...memberRows, ...specialRows], [memberRows, specialRows]);
+  const rows = useMemo(() => {
+    const allRows = [...memberRows, ...specialRows];
+    return allRows.filter(row => {
+      return weekDays.some(day => {
+        const entries = getEntriesForCell(row.id, formatDate(day));
+        return entries.length > 0;
+      });
+    });
+  }, [memberRows, specialRows, weekDays, getEntriesForCell, scheduleState.entries]);
 
   // ─── Projeto ativo no hover/seleção do grafo ──────────────────
   const activeProjectId = selectedProjectId || hoveredProjectId;
