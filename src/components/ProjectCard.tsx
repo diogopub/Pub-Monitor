@@ -510,9 +510,9 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       <div className="px-3 py-2 border-b border-border text-[10px] font-bold">
         <div className="space-y-1.5">
           {/* Row 1: ENTRADA & DIÁRIAS PREV */}
-          <div className="grid grid-cols-[1fr_1fr] gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-14 shrink-0">ENTRADA</span>
+          <div className="grid grid-cols-[1fr_1fr] gap-x-6">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-9 shrink-0">ENTRADA</span>
               {editingDates === "entry" ? (
                 <Input
                   type="date"
@@ -529,14 +529,14 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               ) : (
                 <button
                   onClick={() => !readOnly && setEditingDates("entry")}
-                  className={`px-1.5 py-0.5 rounded font-mono transition-colors min-w-[70px] text-left ${readOnly ? "" : "cursor-pointer"} ${card.entryDate ? 'bg-secondary/30 text-foreground' : 'bg-yellow-500/10 text-yellow-500/80'}`}
+                  className={`px-1.5 py-0.5 rounded font-mono transition-colors min-w-[70px] text-left ${readOnly ? "" : "cursor-pointer"} ${card.entryDate ? 'bg-secondary/30 text-foreground' : 'bg-blue-500/10 text-blue-500/80'}`}
                 >
                   {formatDateBR(card.entryDate) || "---"}
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground whitespace-nowrap">DIÁRIAS PREV.</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-15 shrink-0">DIÁRIAS PREV.</span>
               <Input
                 type="number"
                 value={estimatedDailies}
@@ -545,16 +545,16 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   setEstimatedDailies(val);
                 }}
                 onBlur={() => updateCard(card.id, { estimatedDailies })}
-                className="h-5 text-[10px] w-10 px-1 bg-transparent border-none text-right font-mono focus-visible:ring-0"
+                className="h-5 text-[10px] w-10 px-1 bg-white/5 border-none text-right font-mono focus-visible:ring-0 rounded"
                 disabled={readOnly}
               />
             </div>
           </div>
 
           {/* Row 2: ENTREGA & DIÁRIAS UTIL */}
-          <div className="grid grid-cols-[1fr_1fr] gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-14 shrink-0">ENTREGA</span>
+          <div className="grid grid-cols-[1fr_1fr] gap-x-6">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-9 shrink-0">ENTREGA</span>
               {editingDates === "delivery" ? (
                 <Input
                   type="date"
@@ -577,16 +577,18 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground whitespace-nowrap">DIÁRIAS UTIL.</span>
-              <span className="text-foreground w-10 text-right font-mono">{utilDailies}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-15 shrink-0">DIÁRIAS UTIL.</span>
+              <span className="w-10 px-1 py-0.5 text-right font-mono text-foreground bg-white/[0.02] rounded">
+                {(utilDailies % 1 === 0) ? utilDailies : utilDailies.toFixed(1)}
+              </span>
             </div>
           </div>
 
-          {/* Row 3: APRESEN & Timeline & Crono */}
-          <div className="grid grid-cols-[1.5fr_1.5fr] items-center gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-14 shrink-0">APRESEN</span>
+          {/* Row 3: APRESEN & ASSETS */}
+          <div className="grid grid-cols-[1.1fr_0.9fr] gap-x-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-9 shrink-0">APRESEN</span>
               {editingDates === "presentation" ? (
                 <Input
                   type="date"
@@ -609,19 +611,20 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
+
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 scale-[0.8] origin-left">
+              <div className="flex items-center gap-1.5 scale-[0.85] origin-left">
                 <Switch
                   checked={card.showInTimeline !== false}
                   onCheckedChange={(checked) => updateCard(card.id, { showInTimeline: checked })}
                   disabled={readOnly}
-                  className="data-[state=checked]:bg-primary"
+                  className="data-[state=checked]:bg-primary h-4 w-7 [&_span]:h-3 [&_span]:w-3"
                 />
-                <span className="text-[7px] font-bold uppercase tracking-tight text-muted-foreground/60 whitespace-nowrap">TIMELINE</span>
+                <span className="text-[9px] font-bold uppercase tracking-tight text-white/70 whitespace-nowrap mt-[1px]">TIMELINE</span>
               </div>
               <button
                 onClick={() => setShowDiarias(true)}
-                className="px-3 py-1 rounded bg-secondary/80 font-bold text-foreground hover:bg-primary/20 transition-colors cursor-pointer text-[10px] uppercase tracking-wide h-6 leading-none flex items-center"
+                className="px-3 py-1 rounded bg-secondary hover:bg-secondary/80 text-foreground transition-all cursor-pointer text-[10px] font-bold uppercase tracking-wide h-6 leading-none flex items-center justify-center shadow-lg border border-white/5 active:scale-95"
               >
                 Crono
               </button>
