@@ -59,6 +59,8 @@ export interface ProjectCardData {
   timelinePins?: TimelinePin[];
   badges?: string[];
   showInTimeline?: boolean;
+  presentationDate?: string;
+  estimatedDailies?: number;
 }
 
 export interface FeedEntry {
@@ -429,7 +431,7 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
         const timeStr = formatTime(now);
         const dateStr = now.toLocaleDateString("pt-BR");
         const displayLabel = pin.labels[labelIndex] || "ENTRADA";
-        const message = `CONCLUÍDO: ${displayLabel} do projeto ${card.name} às ${timeStr} de ${dateStr}`;
+        const message = `${displayLabel} do projeto ${card.name} às ${timeStr} de ${dateStr}`;
         updatedFeed = [{ id: nanoid(8), message, timestamp: now.toISOString() }, ...card.feed];
       } else {
         updatedFeed = card.feed;

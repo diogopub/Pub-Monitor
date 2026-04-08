@@ -14,7 +14,7 @@ import { useNetwork } from "@/contexts/NetworkContext";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, entryToSlots } from "@/lib/utils";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import {
   Popover,
@@ -253,16 +253,46 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     useProjectCards();
   const { state: scheduleState, addEntry, updateEntry, removeEntry } = useSchedule();
   const [feedIndex, setFeedIndex] = useState(0);
-  const [editingDates, setEditingDates] = useState<false | "entry" | "delivery">(false);
+  const [editingDates, setEditingDates] = useState<false | "entry" | "delivery" | "presentation">(false);
   const [entryDate, setEntryDate] = useState(card.entryDate);
   const [deliveryDate, setDeliveryDate] = useState(card.deliveryDate);
+  const [presentationDate, setPresentationDate] = useState(card.presentationDate || "");
+  const [estimatedDailies, setEstimatedDailies] = useState(card.estimatedDailies || 0);
   const [showDiarias, setShowDiarias] = useState(false);
   const { currentUserRole } = usePermissions();
+  const { state: networkState } = useNetwork();
   const readOnly = currentUserRole === "viewer";
 
   const progress = calcProgress(card.entryDate, card.deliveryDate);
   const daysToEntry = calcDaysFromNow(card.entryDate);
   const daysToDelivery = calcDaysFromNow(card.deliveryDate);
+  const daysToPresentation = calcDaysFromNow(card.presentationDate || "");
+
+  const utilDailies = useMemo(() => {
+    const projectMemberDaySlots = new Map<string, number>();
+    
+    // Logic same as WeeklySchedule.tsx
+    scheduleState.entries.forEach(entry => {
+      const member = networkState.members.find(m => m.id === entry.memberId);
+      const isVinicius = member?.name?.trim().toUpperCase() === "VINÍCIUS";
+
+      if (
+        entry.projectId === card.id && 
+        entry.memberId !== "sr-entradas" && 
+        !isVinicius
+      ) {
+        const { durationSlots } = entryToSlots(entry);
+        const key = `${entry.memberId}_${entry.date}`;
+        projectMemberDaySlots.set(key, (projectMemberDaySlots.get(key) || 0) + durationSlots);
+      }
+    });
+
+    let total = 0;
+    projectMemberDaySlots.forEach((slots) => {
+      total += slots <= 4 ? 0.5 : 1.0;
+    });
+    return total;
+  }, [scheduleState.entries, card.id, networkState.members]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(card.name);
@@ -276,65 +306,80 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     if (editingDates === false) {
       setEntryDate(card.entryDate || "");
       setDeliveryDate(card.deliveryDate || "");
+      setPresentationDate(card.presentationDate || "");
     }
-  }, [card.entryDate, card.deliveryDate, editingDates]);
+  }, [card.entryDate, card.deliveryDate, card.presentationDate, editingDates]);
 
-  const handleSaveDates = (newEntryDate?: string, newDeliveryDate?: string) => {
+  useEffect(() => {
+    setEstimatedDailies(card.estimatedDailies || 0);
+  }, [card.estimatedDailies]);
+
+  const handleSaveDates = (newEntryDate?: string, newDeliveryDate?: string, newPresentationDate?: string) => {
     const finalEntryDate = newEntryDate !== undefined ? newEntryDate : entryDate;
     const finalDeliveryDate = newDeliveryDate !== undefined ? newDeliveryDate : deliveryDate;
+    const finalPresentationDate = newPresentationDate !== undefined ? newPresentationDate : presentationDate;
 
     // 1. Sync Timeline Pins
     let updatedPins = [...(card.timelinePins || [])];
+    
+    // ENTREGA PIN (RED)
     const deliveryPinIndex = updatedPins.findIndex((p) => p.labels.includes("ENTREGA"));
-
     if (finalDeliveryDate) {
       if (deliveryPinIndex !== -1) {
-        updatedPins[deliveryPinIndex] = {
-          ...updatedPins[deliveryPinIndex],
-          date: finalDeliveryDate,
-          color: "red",
-        };
+        updatedPins[deliveryPinIndex] = { ...updatedPins[deliveryPinIndex], date: finalDeliveryDate, color: "red" };
       } else {
-        updatedPins.push({
-          id: nanoid(8),
-          date: finalDeliveryDate,
-          color: "red",
-          labels: ["ENTREGA"],
-        });
+        updatedPins.push({ id: nanoid(8), date: finalDeliveryDate, color: "red", labels: ["ENTREGA"] });
       }
-    } else {
-      if (deliveryPinIndex !== -1) {
-        updatedPins.splice(deliveryPinIndex, 1);
+    } else if (deliveryPinIndex !== -1) {
+      updatedPins.splice(deliveryPinIndex, 1);
+    }
+
+    // APRESENTAÇÃO PIN (YELLOW)
+    const presentationPinIndex = updatedPins.findIndex((p) => p.labels.includes("APRESENTAÇÃO CLIENTE"));
+    if (finalPresentationDate) {
+      if (presentationPinIndex !== -1) {
+        updatedPins[presentationPinIndex] = { ...updatedPins[presentationPinIndex], date: finalPresentationDate, color: "yellow" };
+      } else {
+        updatedPins.push({ id: nanoid(8), date: finalPresentationDate, color: "yellow", labels: ["APRESENTAÇÃO CLIENTE"] });
       }
+    } else if (presentationPinIndex !== -1) {
+      updatedPins.splice(presentationPinIndex, 1);
     }
 
     // 2. Sync Agenda (Entradas e Entregas) - sr-entradas
-    const existingAgendaEntry = (scheduleState.entries || []).find(
-      (e) =>
-        e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "entrega-pub"
+    
+    // ENTREGA task
+    const existingDeliveryEntry = (scheduleState.entries || []).find(
+      (e) => e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "entrega-pub"
     );
-
     if (finalDeliveryDate) {
-      if (existingAgendaEntry) {
-        updateEntry(existingAgendaEntry.id, { date: finalDeliveryDate });
+      if (existingDeliveryEntry) {
+        updateEntry(existingDeliveryEntry.id, { date: finalDeliveryDate });
       } else {
-        addEntry({
-          id: nanoid(8),
-          memberId: "sr-entradas",
-          date: finalDeliveryDate,
-          activityId: "entrega-pub",
-          projectId: card.id,
-          duration: 8,
-          startSlot: 0,
-        });
+        addEntry({ id: nanoid(8), memberId: "sr-entradas", date: finalDeliveryDate, activityId: "entrega-pub", projectId: card.id, duration: 8, startSlot: 0 });
       }
-    } else if (existingAgendaEntry) {
-      removeEntry(existingAgendaEntry.id);
+    } else if (existingDeliveryEntry) {
+      removeEntry(existingDeliveryEntry.id);
+    }
+
+    // APRESENTAÇÃO task
+    const existingPresentationEntry = (scheduleState.entries || []).find(
+      (e) => e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "apresentacao-cliente"
+    );
+    if (finalPresentationDate) {
+      if (existingPresentationEntry) {
+        updateEntry(existingPresentationEntry.id, { date: finalPresentationDate });
+      } else {
+        addEntry({ id: nanoid(8), memberId: "sr-entradas", date: finalPresentationDate, activityId: "apresentacao-cliente", projectId: card.id, duration: 8, startSlot: 0 });
+      }
+    } else if (existingPresentationEntry) {
+      removeEntry(existingPresentationEntry.id);
     }
 
     updateCard(card.id, { 
       entryDate: finalEntryDate, 
       deliveryDate: finalDeliveryDate, 
+      presentationDate: finalPresentationDate,
       timelinePins: updatedPins, 
       showInTimeline: card.showInTimeline !== false 
     });
@@ -461,12 +506,13 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
         </div>
       </div>
 
-      {/* Prazo */}
-      <div className="px-3 py-2 border-b border-border">
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between text-[10px]">
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-muted-foreground">ENTRADA</span>
+      {/* Datas e Diárias */}
+      <div className="px-3 py-2 border-b border-border text-[10px] font-bold">
+        <div className="space-y-1.5">
+          {/* Row 1: ENTRADA & DIÁRIAS PREV */}
+          <div className="grid grid-cols-[1fr_1fr] gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14 shrink-0">ENTRADA</span>
               {editingDates === "entry" ? (
                 <Input
                   type="date"
@@ -477,23 +523,38 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                     if (e.key === "Enter") handleSaveDates();
                     if (e.key === "Escape") setEditingDates(false);
                   }}
-                  className="h-6 text-[10px] w-28"
+                  className="h-5 text-[10px] w-24 px-1"
                   autoFocus
                 />
               ) : (
                 <button
                   onClick={() => !readOnly && setEditingDates("entry")}
-                  className={`px-1.5 py-0.5 rounded font-mono transition-colors ${readOnly ? "" : "cursor-pointer"} ${card.entryDate ? 'bg-secondary/50 text-foreground hover:bg-secondary/80' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}`}
+                  className={`px-1.5 py-0.5 rounded font-mono transition-colors min-w-[70px] text-left ${readOnly ? "" : "cursor-pointer"} ${card.entryDate ? 'bg-secondary/30 text-foreground' : 'bg-yellow-500/10 text-yellow-500/80'}`}
                 >
-                  {formatDateBR(card.entryDate) || "Adicionar"}
+                  {formatDateBR(card.entryDate) || "---"}
                 </button>
               )}
             </div>
-            <span className="text-muted-foreground font-mono">{daysToEntry !== null ? Math.abs(daysToEntry) : "-"}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground whitespace-nowrap">DIÁRIAS PREV.</span>
+              <Input
+                type="number"
+                value={estimatedDailies}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value) || 0;
+                  setEstimatedDailies(val);
+                }}
+                onBlur={() => updateCard(card.id, { estimatedDailies })}
+                className="h-5 text-[10px] w-10 px-1 bg-transparent border-none text-right font-mono focus-visible:ring-0"
+                disabled={readOnly}
+              />
+            </div>
           </div>
-          <div className="flex items-center text-[10px]">
-            <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-muted-foreground">ENTREGA</span>
+
+          {/* Row 2: ENTREGA & DIÁRIAS UTIL */}
+          <div className="grid grid-cols-[1fr_1fr] gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14 shrink-0">ENTREGA</span>
               {editingDates === "delivery" ? (
                 <Input
                   type="date"
@@ -504,36 +565,67 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                     if (e.key === "Enter") handleSaveDates();
                     if (e.key === "Escape") setEditingDates(false);
                   }}
-                  className="h-6 text-[10px] w-28"
+                  className="h-5 text-[10px] w-24 px-1"
                   autoFocus
                 />
               ) : (
                 <button
                   onClick={() => !readOnly && setEditingDates("delivery")}
-                  className={`px-1.5 py-0.5 rounded font-mono transition-colors ${readOnly ? "" : "cursor-pointer"} ${card.deliveryDate ? 'bg-secondary/50 text-foreground hover:bg-secondary/80' : 'bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30'}`}
+                  className={`px-1.5 py-0.5 rounded font-mono transition-colors min-w-[70px] text-left ${readOnly ? "" : "cursor-pointer"} ${card.deliveryDate ? 'bg-secondary/30 text-foreground' : 'bg-red-500/10 text-red-500/80'}`}
                 >
-                  {formatDateBR(card.deliveryDate) || "Adicionar"}
+                  {formatDateBR(card.deliveryDate) || "---"}
                 </button>
               )}
             </div>
-            <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground whitespace-nowrap">DIÁRIAS UTIL.</span>
+              <span className="text-foreground w-10 text-right font-mono">{utilDailies}</span>
+            </div>
+          </div>
+
+          {/* Row 3: APRESEN & Timeline & Crono */}
+          <div className="grid grid-cols-[1.5fr_1.5fr] items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14 shrink-0">APRESEN</span>
+              {editingDates === "presentation" ? (
+                <Input
+                  type="date"
+                  value={presentationDate}
+                  onChange={(e) => setPresentationDate(e.target.value)}
+                  onBlur={() => handleSaveDates()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveDates();
+                    if (e.key === "Escape") setEditingDates(false);
+                  }}
+                  className="h-5 text-[10px] w-24 px-1"
+                  autoFocus
+                />
+              ) : (
+                <button
+                  onClick={() => !readOnly && setEditingDates("presentation")}
+                  className={`px-1.5 py-0.5 rounded font-mono transition-colors min-w-[70px] text-left ${readOnly ? "" : "cursor-pointer"} ${card.presentationDate ? 'bg-secondary/30 text-foreground' : 'bg-blue-500/10 text-blue-500/80'}`}
+                >
+                  {formatDateBR(card.presentationDate || "") || "---"}
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1 scale-[0.8] origin-left">
                 <Switch
                   checked={card.showInTimeline !== false}
                   onCheckedChange={(checked) => updateCard(card.id, { showInTimeline: checked })}
                   disabled={readOnly}
-                  className="scale-[0.55] origin-center data-[state=checked]:bg-primary/60"
+                  className="data-[state=checked]:bg-primary"
                 />
-                <span className="text-[7px] font-bold uppercase tracking-tight text-muted-foreground/50">Timeline</span>
+                <span className="text-[7px] font-bold uppercase tracking-tight text-muted-foreground/60 whitespace-nowrap">TIMELINE</span>
               </div>
               <button
                 onClick={() => setShowDiarias(true)}
-                className="px-2.5 py-0.5 rounded border border-border bg-card font-semibold text-foreground hover:bg-secondary/80 transition-colors cursor-pointer text-[10px]"
+                className="px-3 py-1 rounded bg-secondary/80 font-bold text-foreground hover:bg-primary/20 transition-colors cursor-pointer text-[10px] uppercase tracking-wide h-6 leading-none flex items-center"
               >
                 Crono
               </button>
             </div>
-            <span className="text-muted-foreground font-mono">{daysToDelivery !== null ? Math.abs(daysToDelivery) : "-"}</span>
           </div>
         </div>
       </div>
