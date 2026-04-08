@@ -51,7 +51,7 @@ export default function SidePanel({
   collapsed,
   onToggle,
 }: SidePanelProps) {
-  const { state: cardsState, updateCard, addFeedEntry } = useProjectCards();
+  const { state: cardsState, updateCard, togglePinStatus } = useProjectCards();
   const { currentUserRole } = usePermissions();
   const { user } = useAuth();
   const readOnly = currentUserRole === "viewer";
@@ -97,32 +97,7 @@ export default function SidePanel({
   const sortedDates = Object.keys(groupedPins).sort((a, b) => a.localeCompare(b));
 
   const handleToggleLabel = (cardId: string, pinId: string, labelIndex: number, currentStatus: boolean, pinLabel: string) => {
-    // Permission: all roles (admin, editor, viewer) can toggle checks per user request
-
-    const card = cardsState.cards.find((c) => c.id === cardId);
-    if (!card || !card.timelinePins) return;
-
-    const newStatus = !currentStatus;
-    const now = new Date();
-
-    const newPins = card.timelinePins.map((p) => {
-      if (p.id !== pinId) return p;
-      const completedLabels = p.completedLabels ? [...p.completedLabels] : new Array(p.labels.length).fill(false);
-      const completedBy = p.completedBy ? [...p.completedBy] : new Array(p.labels.length).fill(null);
-      completedLabels[labelIndex] = newStatus;
-      completedBy[labelIndex] = newStatus ? currentUserFirstName : null;
-      return { ...p, completedLabels, completedBy };
-    });
-
-    updateCard(cardId, { timelinePins: newPins });
-
-    // Se marcou como feito, adiciona ao feed
-    if (newStatus) {
-      const timeStr = formatTime(now);
-      const dateStr = now.toLocaleDateString("pt-BR");
-      const displayLabel = pinLabel || "ENTRADA";
-      addFeedEntry(cardId, `CONCLUÍDO: ${displayLabel} do projeto ${card.name} às ${timeStr} de ${dateStr}`);
-    }
+    togglePinStatus(cardId, pinId, labelIndex, currentUserFirstName);
   };
 
   const getDayLabel = (dateObj: Date) => {

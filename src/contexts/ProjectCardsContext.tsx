@@ -87,6 +87,7 @@ interface ProjectCardsContextType {
   removeTeamMember: (cardId: string, memberId: string) => void;
   addFeedEntry: (cardId: string, message: string) => void;
   removeFeedEntry: (cardId: string, feedId: string) => void;
+  togglePinStatus: (cardId: string, pinId: string, labelIndex: number, userName: string) => void;
   setState: (state: ProjectCardsState) => Promise<void>;
 }
 
@@ -402,6 +403,55 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
     }
   }, [canWrite]);
 
+  const togglePinStatus = useCallback((cardId: string, pinId: string, labelIndex: number, userName: string) => {
+    let updatedPins: TimelinePin[] | null = null;
+    let updatedFeed: FeedEntry[] | null = null;
+
+    setStateInternal(prev => {
+      const card = prev.cards.find(c => c.id === cardId);
+      if (!card || !card.timelinePins) return prev;
+
+      const pin = card.timelinePins.find(p => p.id === pinId);
+      if (!pin) return prev;
+
+      const completedLabels = pin.completedLabels ? [...pin.completedLabels] : new Array(pin.labels.length).fill(false);
+      const completedBy = pin.completedBy ? [...pin.completedBy] : new Array(pin.labels.length).fill(null);
+      
+      const newStatus = !completedLabels[labelIndex];
+      completedLabels[labelIndex] = newStatus;
+      completedBy[labelIndex] = newStatus ? userName : null;
+
+      const newPin = { ...pin, completedLabels, completedBy };
+      updatedPins = card.timelinePins.map(p => p.id === pinId ? newPin : p);
+
+      if (newStatus) {
+        const now = new Date();
+        const timeStr = formatTime(now);
+        const dateStr = now.toLocaleDateString("pt-BR");
+        const displayLabel = pin.labels[labelIndex] || "ENTRADA";
+        const message = `CONCLUÍDO: ${displayLabel} do projeto ${card.name} às ${timeStr} de ${dateStr}`;
+        updatedFeed = [{ id: nanoid(8), message, timestamp: now.toISOString() }, ...card.feed];
+      } else {
+        updatedFeed = card.feed;
+      }
+
+      const next = {
+        ...prev,
+        cards: prev.cards.map(c => c.id === cardId ? { ...c, timelinePins: updatedPins!, feed: updatedFeed! } : c)
+      };
+      saveLocalState(next);
+      return next;
+    });
+
+    // Bypass canWrite specifically for this action to allow viewers to mark tasks
+    if (updatedPins && updatedFeed) {
+      updateDoc(doc(db, CARDS_COLLECTION, cardId), { 
+        timelinePins: sanitizeForFirestore(updatedPins),
+        feed: sanitizeForFirestore(updatedFeed)
+      }).catch(console.error);
+    }
+  }, []);
+
   const setStateBulk = useCallback(async (newState: ProjectCardsState) => {
     const validated: ProjectCardsState = { cards: newState.cards || [] };
     
@@ -427,6 +477,7 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
     <ProjectCardsContext.Provider value={{
       state, addCard, updateCard, removeCard, toggleDocument, addDocument, removeDocument,
       reorderDocument, addTeamMember, updateTeamMember, removeTeamMember, addFeedEntry, removeFeedEntry,
+      togglePinStatus,
       setState: setStateBulk,
     }}>
       {children}
