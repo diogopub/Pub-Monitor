@@ -1,17 +1,22 @@
 /**
  * ScheduleFooter — Versão compacta da agenda semanal para o rodapé do Painel
- * Quando um projeto é hovered no grafo, mostra o painel de Diárias desse projeto.
+ * Espelha fielmente o WeeklySchedule: mesmo sistema de 8 slots, mesmas linhas especiais,
+ * mesmas atividades (incluindo ENTRADAS_ACTIVITIES para sr-entradas).
  */
 import { useState, useMemo } from "react";
 import { useNetwork, type TeamMember } from "@/contexts/NetworkContext";
-import { useSchedule, ACTIVITY_TYPES } from "@/contexts/ScheduleContext";
+import { useSchedule, ACTIVITY_TYPES, ENTRADAS_ACTIVITIES } from "@/contexts/ScheduleContext";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DailyAllocationPanel from "@/components/DailyAllocationPanel";
-import { entryToSlots } from "@/lib/utils";
+import { entryToSlots, SCHEDULE_SLOTS } from "@/lib/utils";
 
+// ─── FooterTaskBar ────────────────────────────────────────────────
+// Espelha o TaskBar do WeeklySchedule usando o MESMO sistema de 8 slots.
+// Usa entryToSlots() para normalizar entradas legadas (startOffset/duration como fração)
+// e entradas novas (startSlot/duration como inteiros).
 function FooterTaskBar({
   entry,
   act,
@@ -21,31 +26,37 @@ function FooterTaskBar({
   act: any;
   proj: any;
 }) {
-  const duration = entry.duration || 1;
-  const slotIndex = entry.slotIndex || 0;
-  const startOffset = entry.startOffset || 0;
-  const paddingCompensation = Math.max(0, Math.ceil(duration - 1)) * 1;
+  const { startSlot, durationSlots } = entryToSlots(entry);
+
+  // Posicionamento idêntico ao TaskBar do WeeklySchedule
+  const leftPct  = (startSlot / SCHEDULE_SLOTS) * 100;
+  const widthPct = (durationSlots / SCHEDULE_SLOTS) * 100;
+  const rowTop   = (entry.slotIndex || 0) * 22 + 2; // 22px por linha de slot, 2px de gap
+  const barHeight = 20;
+
+  const label = entry.customLabel || (proj ? proj.name : act.label);
 
   return (
     <div
-      className="absolute flex items-center rounded-[2px] text-[8px] font-bold leading-tight z-10"
+      className="absolute flex items-center rounded text-[9px] font-semibold leading-tight z-10"
       style={{
         backgroundColor: act.color,
         color: act.textColor,
-        top: `${slotIndex * 17 + 2}px`,
-        left: startOffset === 0 ? '1px' : `calc(${startOffset * 100}% + 1px)`,
-        width: `calc(${duration * 100}% - 2px + ${paddingCompensation}px)`,
-        height: '15px',
+        top: `${rowTop}px`,
+        left: `${leftPct}%`,
+        width: `${widthPct}%`,
+        height: `${barHeight}px`,
       }}
-      title={`${proj ? proj.name : act.label} (${entryToSlots(entry).durationSlots <= 4 ? "0.5" : "1.0"} diária)`}
+      title={`${label} (${durationSlots <= 4 ? "0.5" : "1.0"} diária)`}
     >
       <div className="flex-1 truncate text-center px-1">
-        {proj ? proj.name : act.label}
+        {label}
       </div>
     </div>
   );
 }
 
+// ─── Helpers de data ─────────────────────────────────────────────
 function getMonday(d: Date): Date {
   const date = new Date(d);
   const day = date.getDay();
@@ -71,21 +82,29 @@ function formatDayHeader(d: Date): { day: string; weekday: string } {
   return { day, weekday: weekdays[d.getDay()] };
 }
 
+// ─── Props ────────────────────────────────────────────────────────
 interface ScheduleFooterProps {
   hoveredProjectId?: string | null;
   selectedProjectId?: string | null;
   highlightMemberId?: string | null;
 }
 
-export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, highlightMemberId }: ScheduleFooterProps) {
+// ─── Componente principal ────────────────────────────────────────
+export default function ScheduleFooter({
+  hoveredProjectId,
+  selectedProjectId,
+  highlightMemberId,
+}: ScheduleFooterProps) {
   const { state: networkState } = useNetwork();
   const { state: scheduleState, getEntriesForCell, getWeekRoster } = useSchedule();
   const { state: cardsState } = useProjectCards();
+
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
   const [expanded, setExpanded] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
 
+  // ─── Drag-to-navigate ──────────────────────────────────────────
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button")) return;
     setIsDragging(true);
@@ -97,7 +116,6 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
     const x = e.pageX;
     const walk = startX - x;
     const threshold = 80;
-
     if (Math.abs(walk) > threshold) {
       const daysToShift = Math.floor(walk / threshold);
       if (daysToShift !== 0) {
@@ -111,6 +129,7 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
     setIsDragging(false);
   };
 
+  // ─── Dias da semana visíveis ──────────────────────────────────
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, i) => addDays(currentMonday, i)),
     [currentMonday]
@@ -119,30 +138,45 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
   const today = formatDate(new Date());
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
 
-  // Use the same roster logic as WeeklySchedule
-  const rows = useMemo(() => {
+  // ─── Linhas de membros (mesmo roster do WeeklySchedule) ───────
+  const memberRows = useMemo(() => {
     const allMemberIds = networkState.members.map(m => m.id);
     const rosterIds = getWeekRoster ? getWeekRoster(weekKey, allMemberIds) : allMemberIds;
-    
     return rosterIds
       .map(id => networkState.members.find(m => m.id === id))
       .filter((m): m is TeamMember => !!m && m.role !== "management")
-      .map((m) => ({
+      .map(m => ({
         id: m.id,
         name: m.name,
         color: m.color,
+        isEntradaEntrega: false,
       }));
   }, [networkState.members, getWeekRoster, weekKey]);
 
-  // Find hovered or selected project card
+  // ─── Linhas especiais (freelancers + sr-entradas) ─────────────
+  const specialRows = useMemo(() => {
+    return scheduleState.specialRows
+      .filter(r => r.type !== "freelancer")
+      .map(sr => ({
+        id: sr.id,
+        name: sr.name,
+        color: "#6366f1",
+        isEntradaEntrega: sr.type === "entradas-entregas",
+      }));
+  }, [scheduleState.specialRows]);
+
+  const rows = useMemo(() => [...memberRows, ...specialRows], [memberRows, specialRows]);
+
+  // ─── Projeto ativo no hover/seleção do grafo ──────────────────
   const activeProjectId = selectedProjectId || hoveredProjectId;
   const activeCard = activeProjectId
-    ? cardsState.cards.find((c) => c.id === activeProjectId)
+    ? cardsState.cards.find(c => c.id === activeProjectId)
     : null;
 
+  // ─── Render ──────────────────────────────────────────────────
   return (
     <div className="absolute bottom-0 left-0 right-0 z-20 pointer-events-auto">
-      {/* Toggle bar */}
+      {/* Barra de toggle */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-center py-1 bg-black/30 backdrop-blur-md border-t border-white/10 hover:bg-black/40 transition-colors cursor-pointer"
@@ -158,7 +192,7 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
       </button>
 
       {expanded && (
-        <div 
+        <div
           className="bg-black/15 backdrop-blur-md border-t border-white/5 select-none cursor-grab active:cursor-grabbing"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -166,7 +200,7 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
           onMouseLeave={handleMouseUpOrLeave}
         >
           {activeCard ? (
-            /* ─── Diárias panel for active project ─── */
+            /* ─── Painel de diárias do projeto ativo ─── */
             <div className="p-1 w-full max-h-[50vh] overflow-y-auto">
               <DailyAllocationPanel
                 cardId={activeCard.id}
@@ -179,104 +213,163 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
               />
             </div>
           ) : (
-            /* ─── Default schedule view ─── */
+            /* ─── Agenda compacta (espelho do WeeklySchedule) ─── */
             <ScrollArea className="max-h-[50vh]">
               <table className="w-full border-collapse">
-                  <thead>
-                    <tr>
-                      <th className="w-[80px] text-left px-2 py-1 sticky left-0 z-10 bg-black/20 backdrop-blur-sm">
-                        <div className="flex items-center gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 text-white/50 hover:text-white/80 hover:bg-white/10"
-                            onClick={() => setCurrentMonday((m) => addDays(m, -7))}
-                          >
-                            <ChevronLeft className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 text-white/50 hover:text-white/80 hover:bg-white/10"
-                            onClick={() => setCurrentMonday((m) => addDays(m, 7))}
-                          >
-                            <ChevronRight className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </th>
-                      {weekDays.map((day) => {
-                        const { day: dayNum, weekday } = formatDayHeader(day);
-                        const isToday = formatDate(day) === today;
-                        return (
-                          <th
-                            key={formatDate(day)}
-                            className={`text-center px-1 py-1 border-l border-white/5 min-w-[80px] ${
-                              isToday ? "bg-primary/10" : ""
-                            }`}
-                          >
-                            <div className="flex flex-col items-center select-none pointer-events-none">
-                              <span className={`text-[9px] uppercase font-bold tracking-tight ${isToday ? "text-primary/80" : "text-white/30"}`}>
-                                {weekday}
-                              </span>
-                              <span className={`text-[9px] font-bold ${isToday ? "text-primary" : "text-white/60"}`}>
-                                {dayNum}
-                              </span>
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      const isHighlighted = highlightMemberId === row.id;
-                      
-                      const rowEntries = weekDays.flatMap(day => getEntriesForCell(row.id, formatDate(day)));
-                      const maxSlot = rowEntries.length > 0 ? Math.max(...rowEntries.map(e => e.slotIndex || 0)) : 0;
-                      const rowHeight = Math.max(22, (maxSlot + 1) * 17 + 4);
-
+                <thead>
+                  <tr>
+                    <th className="w-[80px] text-left px-2 py-1 sticky left-0 z-10 bg-black/20 backdrop-blur-sm">
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-white/50 hover:text-white/80 hover:bg-white/10"
+                          onClick={() => setCurrentMonday(m => addDays(m, -7))}
+                        >
+                          <ChevronLeft className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-white/50 hover:text-white/80 hover:bg-white/10"
+                          onClick={() => setCurrentMonday(m => addDays(m, 7))}
+                        >
+                          <ChevronRight className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </th>
+                    {weekDays.map(day => {
+                      const { day: dayNum, weekday } = formatDayHeader(day);
+                      const isToday = formatDate(day) === today;
                       return (
-                      <tr key={row.id} className={`transition-colors ${isHighlighted ? "bg-white/15 ring-1 ring-white/20" : "hover:bg-white/5"}`}>
-                        <td 
-                          className={`px-2 py-0.5 sticky left-0 z-20 backdrop-blur-sm border-t border-white/5 ${isHighlighted ? "bg-white/10" : "bg-black/15"}`}
-                          style={{ height: `${rowHeight}px` }}
+                        <th
+                          key={formatDate(day)}
+                          className={`text-center px-1 py-1 border-l border-white/5 min-w-[80px] ${
+                            isToday ? "bg-primary/10" : ""
+                          }`}
+                        >
+                          <div className="flex flex-col items-center select-none pointer-events-none">
+                            <span
+                              className={`text-[9px] uppercase font-bold tracking-tight ${
+                                isToday ? "text-primary/80" : "text-white/30"
+                              }`}
+                            >
+                              {weekday}
+                            </span>
+                            <span
+                              className={`text-[9px] font-bold ${
+                                isToday ? "text-primary" : "text-white/60"
+                              }`}
+                            >
+                              {dayNum}
+                            </span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(row => {
+                    const isHighlighted = highlightMemberId === row.id;
+                    const activityList = row.isEntradaEntrega
+                      ? ENTRADAS_ACTIVITIES
+                      : ACTIVITY_TYPES;
+
+                    const rowEntries = weekDays.flatMap(day =>
+                      getEntriesForCell(row.id, formatDate(day))
+                    );
+                    const maxSlot = rowEntries.reduce((acc, e) => Math.max(acc, e.slotIndex || 0), 2);
+                    const dynamicHeight = (maxSlot + 1) * 22 + 2;
+
+                    return (
+                      <tr
+                        key={row.id}
+                        className={`transition-colors ${
+                          isHighlighted
+                            ? "bg-white/15 ring-1 ring-white/20"
+                            : "hover:bg-white/5"
+                        }`}
+                      >
+                        {/* Coluna de nome */}
+                        <td
+                          className={`px-2 py-0.5 sticky left-0 z-20 backdrop-blur-sm border-t border-white/5 ${
+                            isHighlighted ? "bg-white/10" : "bg-black/15"
+                          }`}
+                          style={{ height: `${dynamicHeight}px` }}
                         >
                           <div className="flex flex-col justify-center h-full gap-0.5">
                             <div className="flex items-center gap-1.5 pt-1">
                               <div
-                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${isHighlighted ? "ring-1 ring-white/40" : ""}`}
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  isHighlighted ? "ring-1 ring-white/40" : ""
+                                }`}
                                 style={{ backgroundColor: row.color }}
                               />
-                              <span className={`text-[9px] font-medium truncate max-w-[60px] ${isHighlighted ? "text-white/90" : "text-white/60"}`}>
+                              <span
+                                className={`text-[9px] font-medium truncate max-w-[60px] ${
+                                  isHighlighted ? "text-white/90" : "text-white/60"
+                                }`}
+                              >
                                 {row.name}
                               </span>
                             </div>
                             <div className="text-[7px] text-white/40 font-mono pl-3">
-                              {weekDays.reduce((acc, day) => {
-                                const entries = getEntriesForCell(row.id, formatDate(day));
-                                return acc + entries.reduce((dayAcc, e) => dayAcc + (entryToSlots(e).durationSlots <= 4 ? 0.5 : 1.0), 0);
-                              }, 0).toFixed(1)}D TOT
+                              {weekDays
+                                .reduce((acc, day) => {
+                                  const entries = getEntriesForCell(
+                                    row.id,
+                                    formatDate(day)
+                                  );
+                                  return (
+                                    acc +
+                                    entries.reduce(
+                                      (dayAcc, e) =>
+                                        dayAcc +
+                                        (entryToSlots(e).durationSlots <= 4
+                                          ? 0.5
+                                          : 1.0),
+                                      0
+                                    )
+                                  );
+                                }, 0)
+                                .toFixed(1)}D TOT
                             </div>
                           </div>
                         </td>
+
+                        {/* Colunas de dias */}
                         {weekDays.map((day, dayIdx) => {
                           const dateStr = formatDate(day);
-                          const isToday = dateStr === today;
+                          const isTodayCol = dateStr === today;
                           const entries = getEntriesForCell(row.id, dateStr);
                           return (
                             <td
                               key={dateStr}
                               className={`border-t border-l border-white/5 align-top relative ${
-                                isToday ? "bg-primary/5" : ""
+                                isTodayCol ? "bg-primary/5" : ""
                               }`}
                               style={{ zIndex: 10 - dayIdx }}
                             >
-                              <div className="w-full relative" style={{ height: `${rowHeight}px` }}>
-                                {entries.map((entry) => {
-                                  const activity = ACTIVITY_TYPES.find((a) => a.id === entry.activityId);
+                              <div
+                                className="w-full relative"
+                                style={{ height: `${dynamicHeight}px` }}
+                              >
+                                {entries.map(entry => {
+                                  // Mesma lógica de lookup do WeeklySchedule:
+                                  // prefere activityList, fallback para ACTIVITY_TYPES
+                                  const activity =
+                                    activityList.find(
+                                      a => a.id === entry.activityId
+                                    ) ||
+                                    ACTIVITY_TYPES.find(
+                                      a => a.id === entry.activityId
+                                    );
                                   if (!activity) return null;
                                   const proj = entry.projectId
-                                    ? cardsState.cards.find((c) => c.id === entry.projectId)
+                                    ? cardsState.cards.find(
+                                        c => c.id === entry.projectId
+                                      )
                                     : null;
                                   return (
                                     <FooterTaskBar
@@ -292,10 +385,10 @@ export default function ScheduleFooter({ hoveredProjectId, selectedProjectId, hi
                           );
                         })}
                       </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                    );
+                  })}
+                </tbody>
+              </table>
             </ScrollArea>
           )}
         </div>

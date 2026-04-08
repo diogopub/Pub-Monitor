@@ -90,7 +90,8 @@ export default function SidePanel({
   const sortedDates = Object.keys(groupedPins).sort((a, b) => a.localeCompare(b));
 
   const handleToggleLabel = (cardId: string, pinId: string, labelIndex: number, currentStatus: boolean) => {
-    if (readOnly) return;
+    // Permission: all roles (admin, editor, viewer) can toggle checks per user request
+
     const card = cardsState.cards.find((c) => c.id === cardId);
     if (!card || !card.timelinePins) return;
 
@@ -225,7 +226,7 @@ export default function SidePanel({
                                             onCheckedChange={() =>
                                               handleToggleLabel(cardId, pin.id, idx, isCompleted)
                                             }
-                                            disabled={readOnly}
+                                            disabled={false} // Todos os papéis podem marcar conforme pedido
                                             className="mt-0.5 w-[14px] h-[14px] rounded-[3px] border-muted-foreground/40 data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-all disabled:opacity-50 disabled:cursor-default"
                                           />
                                         <label
@@ -235,7 +236,7 @@ export default function SidePanel({
                                             isCompleted
                                               ? "text-muted-foreground line-through opacity-50"
                                               : "text-foreground group-hover:text-primary transition-colors",
-                                            !readOnly && "hover:cursor-pointer"
+                                            "hover:cursor-pointer"
                                           )}
                                           title={displayLabel}
                                         >
