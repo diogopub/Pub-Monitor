@@ -73,7 +73,10 @@ function addDays(d: Date, days: number): Date {
 }
 
 function formatDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const yr = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${yr}-${mo}-${da}`;
 }
 
 function formatDayHeader(d: Date): { day: string; weekday: string } {
