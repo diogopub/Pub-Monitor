@@ -275,7 +275,7 @@ export default function NewProjectDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!name.trim()}>
+          <Button onClick={handleSubmit} disabled={!name.trim() || !client.trim()}>
             Criar Projeto
           </Button>
         </DialogFooter>
