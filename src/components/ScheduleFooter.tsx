@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { useNetwork, type TeamMember } from "@/contexts/NetworkContext";
-import { useSchedule, ACTIVITY_TYPES, ENTRADAS_ACTIVITIES } from "@/contexts/ScheduleContext";
+import { useSchedule, ACTIVITY_TYPES } from "@/contexts/ScheduleContext";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown } from "lucide-react";
@@ -156,27 +156,16 @@ export default function ScheduleFooter({
       }));
   }, [networkState.members, getWeekRoster, weekKey]);
 
-  // ─── Linhas especiais (freelancers + sr-entradas) ─────────────
-  const specialRows = useMemo(() => {
-    return scheduleState.specialRows
-      .filter(r => r.type !== "freelancer")
-      .map(sr => ({
-        id: sr.id,
-        name: sr.name,
-        color: "#6366f1",
-        isEntradaEntrega: sr.type === "entradas-entregas",
-      }));
-  }, [scheduleState.specialRows]);
-
+  // ─── Apenas membros de Criação, Arq e 3D (sem linhas especiais) ─
   const rows = useMemo(() => {
-    const allRows = [...memberRows, ...specialRows];
+    const allRows = [...memberRows];
     return allRows.filter(row => {
       return weekDays.some(day => {
         const entries = getEntriesForCell(row.id, formatDate(day));
         return entries.length > 0;
       });
     });
-  }, [memberRows, specialRows, weekDays, getEntriesForCell, scheduleState.entries]);
+  }, [memberRows, weekDays, getEntriesForCell, scheduleState.entries]);
 
   // ─── Projeto ativo no hover/seleção do grafo ──────────────────
   const activeProjectId = selectedProjectId || hoveredProjectId;
@@ -283,9 +272,6 @@ export default function ScheduleFooter({
                 <tbody>
                   {rows.map(row => {
                     const isHighlighted = highlightMemberId === row.id;
-                    const activityList = row.isEntradaEntrega
-                      ? ENTRADAS_ACTIVITIES
-                      : ACTIVITY_TYPES;
 
                     const rowEntries = weekDays.flatMap(day =>
                       getEntriesForCell(row.id, formatDate(day))
@@ -370,11 +356,8 @@ export default function ScheduleFooter({
                                   // Mesma lógica de lookup do WeeklySchedule:
                                   // prefere activityList, fallback para ACTIVITY_TYPES
                                   const activity =
-                                    activityList.find(
-                                      a => a.id === entry.activityId
-                                    ) ||
                                     ACTIVITY_TYPES.find(
-                                      a => a.id === entry.activityId
+                                      (a: any) => a.id === entry.activityId
                                     );
                                   if (!activity) return null;
                                   const proj = entry.projectId
