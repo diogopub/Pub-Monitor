@@ -532,7 +532,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   setEstimatedDailies(val === "" ? 0 : parseInt(val));
                 }}
                 onBlur={() => updateCard(card.id, { estimatedDailies })}
-                className="h-5 text-[10px] w-10 p-0 pr-1 bg-white/[0.02] border-none text-right font-mono focus-visible:ring-0 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-foreground"
+                className="h-5 text-[10px] w-12 p-0 pr-1.5 bg-white/[0.02] border-none text-right font-mono text-foreground focus-visible:ring-0 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 disabled={readOnly}
               />
             </div>
@@ -566,7 +566,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-muted-foreground w-20 shrink-0 whitespace-nowrap text-[8px]">DIÁRIAS UTIL.</span>
-              <span className="w-10 h-5 px-1 py-0 flex items-center justify-end font-mono text-[10px] text-foreground bg-white/[0.02] rounded border-none">
+              <span className="w-12 h-5 px-1.5 py-0 flex items-center justify-end font-mono text-[10px] text-foreground bg-white/[0.02] rounded border-none">
                 {(utilDailies % 1 === 0) ? utilDailies : utilDailies.toFixed(1)}
               </span>
             </div>
