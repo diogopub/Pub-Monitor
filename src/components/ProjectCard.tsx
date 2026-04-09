@@ -301,7 +301,6 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     if (!isEditingName) setEditedName(card.name);
   }, [card.name, isEditingName]);
 
-  // Sincronizar estados locais quando as props mudam (ex: vindo de outro componente ou sync externo)
   useEffect(() => {
     if (editingDates === false) {
       setEntryDate(card.entryDate || "");
@@ -319,10 +318,8 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     const finalDeliveryDate = newDeliveryDate !== undefined ? newDeliveryDate : deliveryDate;
     const finalPresentationDate = newPresentationDate !== undefined ? newPresentationDate : presentationDate;
 
-    // 1. Sync Timeline Pins
     let updatedPins = [...(card.timelinePins || [])];
     
-    // ENTREGA PIN (RED)
     const deliveryPinIndex = updatedPins.findIndex((p) => p.labels.includes("ENTREGA"));
     if (finalDeliveryDate) {
       if (deliveryPinIndex !== -1) {
@@ -334,7 +331,6 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       updatedPins.splice(deliveryPinIndex, 1);
     }
 
-    // APRESENTAÇÃO PIN (YELLOW)
     const presentationPinIndex = updatedPins.findIndex((p) => p.labels.includes("APRESENTAÇÃO CLIENTE"));
     if (finalPresentationDate) {
       if (presentationPinIndex !== -1) {
@@ -346,9 +342,6 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       updatedPins.splice(presentationPinIndex, 1);
     }
 
-    // 2. Sync Agenda (Entradas e Entregas) - sr-entradas
-    
-    // ENTREGA task
     const existingDeliveryEntry = (scheduleState.entries || []).find(
       (e) => e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "entrega-pub"
     );
@@ -362,7 +355,6 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       removeEntry(existingDeliveryEntry.id);
     }
 
-    // APRESENTAÇÃO task
     const existingPresentationEntry = (scheduleState.entries || []).find(
       (e) => e.memberId === "sr-entradas" && e.projectId === card.id && e.activityId === "apresentacao-cliente"
     );
@@ -479,12 +471,9 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 {card.active !== false ? "Ativo" : "Inativo"}
               </span>
             </div>
-            {card.hub && (
-              <span className="text-[10px] text-muted-foreground">{card.hub}</span>
-            )}
           </div>
-          <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
-            <span>{card.client}</span>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[9px] text-muted-foreground">{card.client}</span>
             {!readOnly && (
               <Popover>
                 <PopoverTrigger asChild>
@@ -494,11 +483,9 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </PopoverTrigger>
                 <PopoverContent className="w-48 p-3" side="top">
                   <p className="text-xs mb-2">Remover este projeto?</p>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="destructive" className="text-xs flex-1" onClick={() => removeCard(card.id)}>
-                      Remover
-                    </Button>
-                  </div>
+                  <Button size="sm" variant="destructive" className="w-full text-xs" onClick={() => removeCard(card.id)}>
+                    Remover
+                  </Button>
                 </PopoverContent>
               </Popover>
             )}
@@ -510,9 +497,9 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       <div className="px-3 py-2 border-b border-border text-[10px] font-bold">
         <div className="space-y-1.5">
           {/* Row 1: ENTRADA & DIÁRIAS PREV */}
-          <div className="grid grid-cols-[1fr_1fr] gap-x-6">
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground w-9 shrink-0">ENTRADA</span>
+          <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14 shrink-0 whitespace-nowrap text-[8px]">ENTRADA</span>
               {editingDates === "entry" ? (
                 <Input
                   type="date"
@@ -535,8 +522,8 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground w-15 shrink-0">DIÁRIAS PREV.</span>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-20 shrink-0 whitespace-nowrap text-[8px]">DIÁRIAS PREV.</span>
               <Input
                 type="number"
                 value={estimatedDailies}
@@ -552,9 +539,9 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
           </div>
 
           {/* Row 2: ENTREGA & DIÁRIAS UTIL */}
-          <div className="grid grid-cols-[1fr_1fr] gap-x-6">
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground w-9 shrink-0">ENTREGA</span>
+          <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14 shrink-0 whitespace-nowrap text-[8px]">ENTREGA</span>
               {editingDates === "delivery" ? (
                 <Input
                   type="date"
@@ -577,18 +564,18 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground w-15 shrink-0">DIÁRIAS UTIL.</span>
-              <span className="w-10 px-1 py-0.5 text-right font-mono text-foreground bg-white/[0.02] rounded">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-20 shrink-0 whitespace-nowrap text-[8px]">DIÁRIAS UTIL.</span>
+              <span className="w-10 h-5 px-1 py-0 flex items-center justify-end font-mono text-[10px] text-foreground bg-white/[0.02] rounded border-none">
                 {(utilDailies % 1 === 0) ? utilDailies : utilDailies.toFixed(1)}
               </span>
             </div>
           </div>
 
           {/* Row 3: APRESEN & ASSETS */}
-          <div className="grid grid-cols-[1.1fr_0.9fr] gap-x-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground w-9 shrink-0">APRESEN</span>
+          <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground w-14 shrink-0 whitespace-nowrap text-[8px]">APRESEN</span>
               {editingDates === "presentation" ? (
                 <Input
                   type="date"
@@ -612,19 +599,19 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               )}
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5 scale-[0.85] origin-left">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 scale-[0.75] origin-left shrink-0">
                 <Switch
                   checked={card.showInTimeline !== false}
                   onCheckedChange={(checked) => updateCard(card.id, { showInTimeline: checked })}
                   disabled={readOnly}
-                  className="data-[state=checked]:bg-primary h-4 w-7 [&_span]:h-3 [&_span]:w-3"
+                  className="data-[state=checked]:bg-primary h-3.5 w-6 [&_span]:h-2.5 [&_span]:w-2.5"
                 />
-                <span className="text-[9px] font-bold uppercase tracking-tight text-white/70 whitespace-nowrap mt-[1px]">TIMELINE</span>
+                <span className="text-[8px] font-bold uppercase tracking-tight text-white/50 whitespace-nowrap">TIMELINE</span>
               </div>
               <button
                 onClick={() => setShowDiarias(true)}
-                className="px-3 py-1 rounded bg-secondary hover:bg-secondary/80 text-foreground transition-all cursor-pointer text-[10px] font-bold uppercase tracking-wide h-6 leading-none flex items-center justify-center shadow-lg border border-white/5 active:scale-95"
+                className="flex-1 px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-foreground transition-all cursor-pointer text-[9px] font-bold uppercase tracking-wide h-5 leading-none flex items-center justify-center shadow-lg border border-white/5 active:scale-95"
               >
                 Crono
               </button>

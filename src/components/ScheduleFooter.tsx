@@ -290,7 +290,7 @@ export default function ScheduleFooter({
                     const rowEntries = weekDays.flatMap(day =>
                       getEntriesForCell(row.id, formatDate(day))
                     );
-                    const maxSlot = rowEntries.reduce((acc, e) => Math.max(acc, e.slotIndex || 0), 2);
+                    const maxSlot = rowEntries.reduce((acc, e) => Math.max(acc, e.slotIndex || 0), 0);
                     const dynamicHeight = (maxSlot + 1) * 22 + 2;
 
                     return (
