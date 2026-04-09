@@ -55,7 +55,11 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
   }, [reminder.attachedTo]);
 
   const handleDragDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).tagName === "TEXTAREA" || (e.target as HTMLElement).closest(".resize-handle")) return;
+    if (
+      (e.target as HTMLElement).tagName === "TEXTAREA" || 
+      (e.target as HTMLElement).closest(".resize-handle") ||
+      (e.target as HTMLElement).closest("button")
+    ) return;
     setIsDragging(true);
     
     const startX = computedPos && !computedPos.hidden ? computedPos.x : reminder.x;
@@ -188,6 +192,7 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
             <button
               key={c.bg}
               onClick={() => updateReminder(reminder.id, { color: c.bg })}
+              onMouseDown={(e) => e.stopPropagation()}
               className={cn(
                 "w-2.5 h-2.5 rounded-full border border-black/10 transition-transform hover:scale-125",
                 reminder.color === c.bg && "ring-1 ring-black/40 scale-110"
@@ -197,6 +202,7 @@ export default function StickyNote({ reminder }: { reminder: Reminder }) {
           ))}
           <button
             onClick={() => deleteReminder(reminder.id)}
+            onMouseDown={(e) => e.stopPropagation()}
             className="ml-1 p-0.5 hover:bg-black/10 rounded-full transition-colors"
           >
             <X className="w-3 h-3 text-black/40" />
