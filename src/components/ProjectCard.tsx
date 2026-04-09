@@ -273,12 +273,13 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
     
     // Logic same as WeeklySchedule.tsx
     scheduleState.entries.forEach(entry => {
+      if (entry.projectId !== card.id) return;
+      
       const member = networkState.members.find(m => m.id === entry.memberId);
-      const isVinicius = member?.name?.trim().toUpperCase() === "VINÍCIUS";
+      const isManagement = member?.role === "management";
+      const isMilestoneRow = entry.memberId === "sr-entradas";
 
-      if (
-        entry.projectId === card.id
-      ) {
+      if (!isManagement && !isMilestoneRow) {
         const { durationSlots } = entryToSlots(entry);
         const key = `${entry.memberId}_${entry.date}`;
         projectMemberDaySlots.set(key, (projectMemberDaySlots.get(key) || 0) + durationSlots);

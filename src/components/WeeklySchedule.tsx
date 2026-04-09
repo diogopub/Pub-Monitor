@@ -1446,45 +1446,52 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
   // Active projects allocations summary
   const activeProjectSummaries = useMemo(() => {
-    const activeCards = cardsState.cards.filter(c => c.active !== false);
+    // 1. Filter active projects (excluding PUB INTERNO as requested)
+    const activeCards = cardsState.cards.filter(c => 
+      c.active !== false && 
+      c.name?.trim().toUpperCase() !== "PUB INTERNO"
+    );
     const activeCardIds = new Set(activeCards.map(c => c.id));
     
-    // Agrupar turnos por projeto, membro e data
-    const projectMemberDaySlots = new Map<string, number>();
+    // 2. Identify projects that have AT LEAST one activity in the agenda (condition to show in header)
+    const projectsWithActivities = new Set<string>();
+    
+    // 3. For calculation (sum), group slots by project/member/day, excluding Management and Milestones
+    const productiveSlots = new Map<string, number>();
 
     scheduleState.entries.forEach(entry => {
-      // Regras:
-      // 1. Deve ser um projeto válido (não PUB INTERNO e deve estar ativo no card)
-      // 2. Não contamos a linha "Entradas e Entregas" no resumo diário
-      // 3. Ignoramos a contagem para o usuário Vinícius
-      // 4. A contagem é ABSOLUTA (não importa a data da tarefa)
-      const member = networkState.members.find(m => m.id === entry.memberId);
-      const isVinicius = member?.name?.trim().toUpperCase() === "VINÍCIUS";
+      if (!entry.projectId || !activeCardIds.has(entry.projectId)) return;
 
-      if (
-        entry.projectId && 
-        activeCardIds.has(entry.projectId)
-      ) {
+      // This project has at least one activity (meets condition 2 to appear)
+      projectsWithActivities.add(entry.projectId);
+
+      const member = networkState.members.find(m => m.id === entry.memberId);
+      const isManagement = member?.role === "management";
+      const isMilestoneRow = entry.memberId === "sr-entradas";
+
+      // Count for the sum only if NOT management and NOT milestone row
+      if (!isManagement && !isMilestoneRow) {
         const { durationSlots } = entryToSlots(entry);
-        // Agrupar a carga diária de um membro num mesmo projeto neste dia
         const key = `${entry.projectId}_${entry.memberId}_${entry.date}`;
-        projectMemberDaySlots.set(key, (projectMemberDaySlots.get(key) || 0) + durationSlots);
+        productiveSlots.set(key, (productiveSlots.get(key) || 0) + durationSlots);
       }
     });
 
-    // Calcular as diárias totais de cada projeto
-    const summaries = new Map<string, number>();
-    projectMemberDaySlots.forEach((slots, key) => {
+    // 4. Calculate total daily rates per project based on productive slots
+    const projectTotals = new Map<string, number>();
+    productiveSlots.forEach((slots, key) => {
       const projectId = key.split('_')[0];
-      // Regra de Diárias por dia: <= 4 slots = 0.5, > 4 slots = 1.0
       const diariaValue = slots <= 4 ? 0.5 : 1.0;
-      summaries.set(projectId, (summaries.get(projectId) || 0) + diariaValue);
+      projectTotals.set(projectId, (projectTotals.get(projectId) || 0) + diariaValue);
     });
 
+    // 5. Generate result string for all active projects that have any activity
     const result: string[] = [];
-    summaries.forEach((diarias, pId) => {
-      const card = activeCards.find(c => c.id === pId);
-      if (card) result.push(`${card.name}: ${diarias}`);
+    activeCards.forEach(card => {
+      if (projectsWithActivities.has(card.id)) {
+        const total = projectTotals.get(card.id) || 0;
+        result.push(`${card.name}: ${total % 1 === 0 ? total : total.toFixed(1)}`);
+      }
     });
 
     return result.sort().join("   |   ");
