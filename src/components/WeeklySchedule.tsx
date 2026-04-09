@@ -1472,7 +1472,8 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       // Count for the sum only if role is creative, architect or 3d
       if (isCountable) {
         const { durationSlots } = entryToSlots(entry);
-        const key = `${entry.projectId}_${entry.memberId}_${entry.date}`;
+        // Use a separator that won't conflict with potential underscores in IDs
+        const key = `${entry.projectId}|${entry.memberId}|${entry.date}`;
         productiveSlots.set(key, (productiveSlots.get(key) || 0) + durationSlots);
       }
     });
@@ -1480,7 +1481,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     // 4. Calculate total daily rates per project based on productive slots
     const projectTotals = new Map<string, number>();
     productiveSlots.forEach((slots, key) => {
-      const projectId = key.split('_')[0];
+      const projectId = key.split('|')[0];
       const diariaValue = slots <= 4 ? 0.5 : 1.0;
       projectTotals.set(projectId, (projectTotals.get(projectId) || 0) + diariaValue);
     });
