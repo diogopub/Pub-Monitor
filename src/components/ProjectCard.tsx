@@ -277,9 +277,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       const isVinicius = member?.name?.trim().toUpperCase() === "VINÍCIUS";
 
       if (
-        entry.projectId === card.id && 
-        entry.memberId !== "sr-entradas" && 
-        !isVinicius
+        entry.projectId === card.id
       ) {
         const { durationSlots } = entryToSlots(entry);
         const key = `${entry.memberId}_${entry.date}`;

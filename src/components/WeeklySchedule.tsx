@@ -1446,7 +1446,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
   // Active projects allocations summary
   const activeProjectSummaries = useMemo(() => {
-    const activeCards = cardsState.cards.filter(c => c.active !== false && c.name?.trim().toUpperCase() !== "PUB INTERNO");
+    const activeCards = cardsState.cards.filter(c => c.active !== false);
     const activeCardIds = new Set(activeCards.map(c => c.id));
     
     // Agrupar turnos por projeto, membro e data
@@ -1463,8 +1463,6 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
 
       if (
         entry.projectId && 
-        entry.memberId !== "sr-entradas" && 
-        !isVinicius &&
         activeCardIds.has(entry.projectId)
       ) {
         const { durationSlots } = entryToSlots(entry);
