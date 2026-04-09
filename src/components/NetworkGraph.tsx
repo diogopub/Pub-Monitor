@@ -3,7 +3,7 @@
  * Design: "Constellation" — dark elegant with depth, glowing nodes
  * Features: curved links, project cards with role slots, animated particles, hover highlights
  */
-import { useNetwork, type MemberRole, ROLE_LABELS } from "@/contexts/NetworkContext";
+import { useNetwork, type MemberRole, ROLE_LABELS, ROLE_COLORS } from "@/contexts/NetworkContext";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useSchedule } from "@/contexts/ScheduleContext";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
@@ -42,6 +42,7 @@ interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
   projectId: string;
   cardTeamMemberId?: string;
   cardId?: string;
+  role?: MemberRole;
 }
 
 interface NetworkGraphProps {
@@ -248,28 +249,68 @@ export default function NetworkGraph({
         
         if (!projNode) return;
 
-        if (projNode.type === "project" && projNode.memberSlots) {
-          const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
-          if (!alreadyAdded) {
-            projNode.memberSlots.push({
-              role: memberNode.role!,
-              color: memberNode.color,
-              name: memberNode.label
-            });
+        // If it's a project (not Hub or Dayoff), find the member's roles in that project card
+        const card = cardsState.cards.find(c => c.id === entry.projectId);
+        
+        // Roles assigned to this member in THIS specific project card
+        let rolesToDraw: MemberRole[] = [];
+        
+        if (card && card.team && Array.isArray(card.team)) {
+          const memberInTeam = card.team.filter(tm => tm.name.toUpperCase() === memberNode.label);
+          if (memberInTeam.length > 0) {
+            rolesToDraw = memberInTeam.map(tm => roleMap[tm.role] || memberNode.role).filter(Boolean) as MemberRole[];
           }
         }
 
-        const targetId = isDayoff ? DAYOFF_NODE_ID : (entry.projectId as string);
-        const linkId = `${memberNode.id}-${targetId}`;
-        if (!addedLinkIds.has(linkId)) {
-          addedLinkIds.add(linkId);
-          links.push({
-            id: linkId,
-            source: memberNode.id,
-            target: projNode.id,
-            color: isDayoff ? "#92400e" : memberNode.color,
-            memberId: memberNode.id,
-            projectId: targetId,
+        // Fallback to member's main role if no specific card role found
+        if (rolesToDraw.length === 0 && !isDayoff && !isPubInterno) {
+          if (memberNode.role) rolesToDraw.push(memberNode.role);
+        }
+
+        // Special case for Hub/Dayoff: just one role/color
+        if (isDayoff || isPubInterno || rolesToDraw.length === 0) {
+          const targetId = isDayoff ? DAYOFF_NODE_ID : (isPubInterno ? "hub" : (entry.projectId as string));
+          const linkId = `${memberNode.id}-${targetId}`;
+          if (!addedLinkIds.has(linkId)) {
+            addedLinkIds.add(linkId);
+            links.push({
+              id: linkId,
+              source: memberNode.id,
+              target: projNode.id,
+              color: isDayoff ? "#92400e" : memberNode.color,
+              memberId: memberNode.id,
+              projectId: targetId,
+              role: isDayoff ? undefined : memberNode.role,
+            });
+          }
+        } else {
+          // Normal project: Draw one tentacle per role defined in the card
+          rolesToDraw.forEach(role => {
+            const linkId = `${memberNode.id}-${entry.projectId}-${role}`;
+            if (!addedLinkIds.has(linkId)) {
+              addedLinkIds.add(linkId);
+              links.push({
+                id: linkId,
+                source: memberNode.id,
+                target: projNode.id,
+                color: ROLE_COLORS[role] || memberNode.color,
+                memberId: memberNode.id,
+                projectId: entry.projectId as string,
+                role: role,
+              });
+              
+              // Also add to project slots for the card label
+              if (projNode.type === "project" && projNode.memberSlots) {
+                const alreadyInSlot = projNode.memberSlots.some(s => s.name === memberNode.label && s.role === role);
+                if (!alreadyInSlot) {
+                  projNode.memberSlots.push({
+                    role,
+                    color: ROLE_COLORS[role] || memberNode.color,
+                    name: memberNode.label
+                  });
+                }
+              }
+            }
           });
         }
       });
@@ -304,16 +345,19 @@ export default function NetworkGraph({
               }
             }
 
-            const linkId = `${memberNode.id}-${card.id}`;
+            const effectiveRole = roleMap[tm.role] || memberNode.role;
+            const linkId = `${memberNode.id}-${card.id}-${effectiveRole || "default"}`;
+            
             if (!addedLinkIds.has(linkId)) {
               addedLinkIds.add(linkId);
               links.push({
                 id: linkId,
                 source: memberNode.id,
                 target: projNode.id,
-                color: memberNode.color,
+                color: effectiveRole ? ROLE_COLORS[effectiveRole] : memberNode.color,
                 memberId: memberNode.id,
                 projectId: card.id,
+                role: effectiveRole,
               });
             }
           });
@@ -789,14 +833,16 @@ export default function NetworkGraph({
       hubNode.fy = height / 2;
     }
 
-    // Curved link path generator — offset endpoints to node border for circular nodes
     const linkPath = (d: GraphLink) => {
       const s = d.source as GraphNode;
       const t = d.target as GraphNode;
       const dx = t.x! - s.x!;
       const dy = t.y! - s.y!;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const dr = dist * 0.8;
+
+      // Role-based curve offset to prevent overlap
+      const roleOffset = d.role === "creative" ? 0.7 : d.role === "architect" ? 0.9 : 1.1;
+      const dr = dist * roleOffset;
 
       // Offset start point to source border (member circles)
       const sRadius = (s.type === "member" || s.id === "__dayoff__") ? s.radius : 0;
