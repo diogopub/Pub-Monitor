@@ -516,33 +516,13 @@ export default function NetworkGraph({
         // DAYOFF label
         el.append("text")
           .attr("text-anchor", "middle")
-          .attr("dy", d.memberSlots && d.memberSlots.length > 0 ? "-0.3em" : "0.35em")
+          .attr("dy", "0.35em")
           .attr("fill", "#fbbf24")
           .attr("font-size", "11px")
           .attr("font-weight", "800")
           .attr("font-family", "Sora, sans-serif")
           .attr("letter-spacing", "0.1em")
           .text("DAYOFF");
-
-        // Member slots (mini circles inside)
-        if (d.memberSlots && d.memberSlots.length > 0) {
-          const slotSize = 10;
-          const totalWidth = d.memberSlots.length * (slotSize + 3) - 3;
-          const startX = -totalWidth / 2;
-          const slotY = 12;
-
-          d.memberSlots.forEach((slot, i) => {
-            const sx = startX + i * (slotSize + 3) + slotSize / 2;
-            el.append("circle")
-              .attr("cx", sx)
-              .attr("cy", slotY)
-              .attr("r", slotSize / 2)
-              .attr("fill", slot.color)
-              .attr("opacity", 0.9)
-              .attr("stroke", "rgba(255,255,255,0.25)")
-              .attr("stroke-width", 1);
-          });
-        }
       });
 
     // ─── Draw PROJECT nodes (cards with role slots) ───
@@ -809,14 +789,26 @@ export default function NetworkGraph({
       hubNode.fy = height / 2;
     }
 
-    // Curved link path generator
+    // Curved link path generator — offset endpoints to node border for circular nodes
     const linkPath = (d: GraphLink) => {
       const s = d.source as GraphNode;
       const t = d.target as GraphNode;
       const dx = t.x! - s.x!;
       const dy = t.y! - s.y!;
-      const dr = Math.sqrt(dx * dx + dy * dy) * 0.8;
-      return `M${s.x},${s.y}A${dr},${dr} 0 0,1 ${t.x},${t.y}`;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const dr = dist * 0.8;
+
+      // Offset start point to source border (member circles)
+      const sRadius = (s.type === "member" || s.id === "__dayoff__") ? s.radius : 0;
+      const sx = s.x! + (dx / dist) * sRadius;
+      const sy = s.y! + (dy / dist) * sRadius;
+
+      // Offset end point to target border (DAYOFF circle, member circles)
+      const tRadius = (t.type === "member" || t.id === "__dayoff__") ? t.radius : 0;
+      const tx = t.x! - (dx / dist) * tRadius;
+      const ty = t.y! - (dy / dist) * tRadius;
+
+      return `M${sx},${sy}A${dr},${dr} 0 0,1 ${tx},${ty}`;
     };
 
     // Particle animation
