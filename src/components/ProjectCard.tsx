@@ -531,7 +531,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   setEstimatedDailies(val);
                 }}
                 onBlur={() => updateCard(card.id, { estimatedDailies })}
-                className="h-5 text-[10px] w-10 px-1 bg-white/5 border-none text-right font-mono focus-visible:ring-0 rounded"
+                className="h-5 text-[10px] w-10 px-1 bg-white/[0.02] border-none text-right font-mono focus-visible:ring-0 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 disabled={readOnly}
               />
             </div>
