@@ -173,6 +173,18 @@ export default function NetworkGraph({
       });
     });
 
+    // Virtual DAYOFF satellite node
+    const DAYOFF_NODE_ID = "__dayoff__";
+    nodes.push({
+      id: DAYOFF_NODE_ID,
+      label: "DAYOFF",
+      type: "project",
+      color: "#92400e",
+      radius: 36,
+      status: "active",
+      memberSlots: [],
+    });
+
     // --- CONNECTIONS LOGIC ---
     if (graphMode === "agora") {
       const now = new Date();
@@ -188,7 +200,8 @@ export default function NetworkGraph({
       // Filter entries that are active in the current period of today
       const SLOTS_PER_DAY = 8;
       const todayEntries = scheduleState.entries.filter(e => {
-        if (!e.projectId) return false;
+        // Accept dayoff entries (no projectId) and normal project entries
+        if (!e.projectId && e.activityId !== "dayoff") return false;
         
         const startDate = new Date(e.date + "T12:00:00");
         const diffDays = Math.floor((todayDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -222,12 +235,18 @@ export default function NetworkGraph({
       // Map schedule entries to project slots and links
       todayEntries.forEach(entry => {
         const memberNode = nodes.find(n => n.id === entry.memberId && n.type === "member");
-        const isPubInterno = entry.projectId === pubInternoId;
-        const projNode = isPubInterno 
-          ? nodes.find(n => n.id === "hub")
-          : nodes.find(n => n.id === entry.projectId && n.type === "project");
+        if (!memberNode) return;
+
+        // Dayoff entries connect to the DAYOFF satellite
+        const isDayoff = entry.activityId === "dayoff";
+        const isPubInterno = !isDayoff && entry.projectId === pubInternoId;
+        const projNode = isDayoff
+          ? nodes.find(n => n.id === DAYOFF_NODE_ID)
+          : isPubInterno
+            ? nodes.find(n => n.id === "hub")
+            : nodes.find(n => n.id === entry.projectId && n.type === "project");
         
-        if (!memberNode || !projNode) return;
+        if (!projNode) return;
 
         if (projNode.type === "project" && projNode.memberSlots) {
           const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
@@ -240,16 +259,17 @@ export default function NetworkGraph({
           }
         }
 
-        const linkId = `${memberNode.id}-${entry.projectId}`;
+        const targetId = isDayoff ? DAYOFF_NODE_ID : (entry.projectId as string);
+        const linkId = `${memberNode.id}-${targetId}`;
         if (!addedLinkIds.has(linkId)) {
           addedLinkIds.add(linkId);
           links.push({
             id: linkId,
             source: memberNode.id,
             target: projNode.id,
-            color: memberNode.color,
+            color: isDayoff ? "#92400e" : memberNode.color,
             memberId: memberNode.id,
-            projectId: entry.projectId as string,
+            projectId: targetId,
           });
         }
       });
@@ -299,6 +319,13 @@ export default function NetworkGraph({
           });
         }
       });
+    }
+
+    // Remove DAYOFF node if nobody is on dayoff
+    const dayoffHasLinks = links.some(l => l.projectId === "__dayoff__");
+    if (!dayoffHasLinks) {
+      const idx = nodes.findIndex(n => n.id === "__dayoff__");
+      if (idx !== -1) nodes.splice(idx, 1);
     }
 
     return { nodes, links };
@@ -449,9 +476,78 @@ export default function NetworkGraph({
       });
     nodeElements.call(drag as any);
 
+    // ─── Draw DAYOFF satellite node (circle, not card) ───
+    nodeElements
+      .filter((d) => d.id === "__dayoff__")
+      .each(function (d) {
+        const el = d3.select(this);
+        const r = d.radius;
+
+        // Outer dashed ring
+        el.append("circle")
+          .attr("r", r + 10)
+          .attr("fill", "none")
+          .attr("stroke", "rgba(146, 64, 14, 0.3)")
+          .attr("stroke-width", 1.5)
+          .attr("stroke-dasharray", "4 3");
+
+        // Warm glow ring
+        el.append("circle")
+          .attr("r", r + 4)
+          .attr("fill", "none")
+          .attr("stroke", "rgba(146, 64, 14, 0.25)")
+          .attr("stroke-width", 2);
+
+        // Main circle
+        el.append("circle")
+          .attr("r", r)
+          .attr("fill", "rgba(146, 64, 14, 0.2)")
+          .attr("stroke", "#92400e")
+          .attr("stroke-width", 2)
+          .attr("filter", "url(#glow)");
+
+        // Inner subtle circle
+        el.append("circle")
+          .attr("r", r - 3)
+          .attr("fill", "none")
+          .attr("stroke", "rgba(146, 64, 14, 0.15)")
+          .attr("stroke-width", 1);
+
+        // DAYOFF label
+        el.append("text")
+          .attr("text-anchor", "middle")
+          .attr("dy", d.memberSlots && d.memberSlots.length > 0 ? "-0.3em" : "0.35em")
+          .attr("fill", "#fbbf24")
+          .attr("font-size", "11px")
+          .attr("font-weight", "800")
+          .attr("font-family", "Sora, sans-serif")
+          .attr("letter-spacing", "0.1em")
+          .text("DAYOFF");
+
+        // Member slots (mini circles inside)
+        if (d.memberSlots && d.memberSlots.length > 0) {
+          const slotSize = 10;
+          const totalWidth = d.memberSlots.length * (slotSize + 3) - 3;
+          const startX = -totalWidth / 2;
+          const slotY = 12;
+
+          d.memberSlots.forEach((slot, i) => {
+            const sx = startX + i * (slotSize + 3) + slotSize / 2;
+            el.append("circle")
+              .attr("cx", sx)
+              .attr("cy", slotY)
+              .attr("r", slotSize / 2)
+              .attr("fill", slot.color)
+              .attr("opacity", 0.9)
+              .attr("stroke", "rgba(255,255,255,0.25)")
+              .attr("stroke-width", 1);
+          });
+        }
+      });
+
     // ─── Draw PROJECT nodes (cards with role slots) ───
     nodeElements
-      .filter((d) => d.type === "project")
+      .filter((d) => d.type === "project" && d.id !== "__dayoff__")
       .each(function (d) {
         const el = d3.select(this);
         const w = d.radius * 2 + 10;
