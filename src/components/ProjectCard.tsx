@@ -276,10 +276,10 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       if (entry.projectId !== card.id) return;
       
       const member = networkState.members.find(m => m.id === entry.memberId);
-      const isManagement = member?.role === "management";
-      const isMilestoneRow = entry.memberId === "sr-entradas";
+      const role = member?.role;
+      const isCountable = role === "creative" || role === "architect" || role === "3d";
 
-      if (!isManagement && !isMilestoneRow) {
+      if (isCountable) {
         const { durationSlots } = entryToSlots(entry);
         const key = `${entry.memberId}_${entry.date}`;
         projectMemberDaySlots.set(key, (projectMemberDaySlots.get(key) || 0) + durationSlots);

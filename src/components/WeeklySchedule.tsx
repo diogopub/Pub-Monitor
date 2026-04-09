@@ -1466,11 +1466,11 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       projectsWithActivities.add(entry.projectId);
 
       const member = networkState.members.find(m => m.id === entry.memberId);
-      const isManagement = member?.role === "management";
-      const isMilestoneRow = entry.memberId === "sr-entradas";
+      const role = member?.role;
+      const isCountable = role === "creative" || role === "architect" || role === "3d";
 
-      // Count for the sum only if NOT management and NOT milestone row
-      if (!isManagement && !isMilestoneRow) {
+      // Count for the sum only if role is creative, architect or 3d
+      if (isCountable) {
         const { durationSlots } = entryToSlots(entry);
         const key = `${entry.projectId}_${entry.memberId}_${entry.date}`;
         productiveSlots.set(key, (productiveSlots.get(key) || 0) + durationSlots);
