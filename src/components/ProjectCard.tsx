@@ -496,9 +496,9 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
       <div className="px-3 py-2 border-b border-border text-[10px] font-bold">
         <div className="space-y-1.5">
           {/* Row 1: ENTRADA & DIÁRIAS PREV */}
-          <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-14 shrink-0 whitespace-nowrap text-[8px]">ENTRADA</span>
+          <div className="grid grid-cols-[1.1fr_0.9fr] gap-x-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-12 shrink-0 whitespace-nowrap text-[8px]">ENTRADA</span>
               {editingDates === "entry" ? (
                 <Input
                   type="date"
@@ -521,8 +521,8 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-20 shrink-0 whitespace-nowrap text-[8px]">DIÁRIAS PREV.</span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-muted-foreground whitespace-nowrap text-[8px] flex-1">DIÁRIAS PREV.</span>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -532,16 +532,16 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   setEstimatedDailies(val === "" ? 0 : parseInt(val));
                 }}
                 onBlur={() => updateCard(card.id, { estimatedDailies })}
-                className="h-5 text-[10px] w-12 p-0 pr-1.5 bg-white/[0.02] border-none text-right font-mono text-foreground focus-visible:ring-0 rounded [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-5 text-[10px] w-10 shrink-0 p-0 text-center bg-white/[0.05] border-none font-mono text-foreground focus-visible:ring-0 rounded drop-shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 disabled={readOnly}
               />
             </div>
           </div>
 
           {/* Row 2: ENTREGA & DIÁRIAS UTIL */}
-          <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-14 shrink-0 whitespace-nowrap text-[8px]">ENTREGA</span>
+          <div className="grid grid-cols-[1.1fr_0.9fr] gap-x-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-12 shrink-0 whitespace-nowrap text-[8px]">ENTREGA</span>
               {editingDates === "delivery" ? (
                 <Input
                   type="date"
@@ -564,18 +564,18 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-20 shrink-0 whitespace-nowrap text-[8px]">DIÁRIAS UTIL.</span>
-              <span className="w-12 h-5 px-1.5 py-0 flex items-center justify-end font-mono text-[10px] text-foreground bg-white/[0.02] rounded border-none">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-muted-foreground whitespace-nowrap text-[8px] flex-1">DIÁRIAS UTIL.</span>
+              <span className="w-10 h-5 shrink-0 flex items-center justify-center font-mono text-[10px] text-foreground bg-white/[0.05] rounded border-none drop-shadow-sm">
                 {(utilDailies % 1 === 0) ? utilDailies : utilDailies.toFixed(1)}
               </span>
             </div>
           </div>
 
           {/* Row 3: APRESEN & ASSETS */}
-          <div className="grid grid-cols-[1.2fr_0.8fr] gap-x-2">
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-14 shrink-0 whitespace-nowrap text-[8px]">APRESEN</span>
+          <div className="grid grid-cols-[1.1fr_0.9fr] gap-x-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-muted-foreground w-12 shrink-0 whitespace-nowrap text-[8px]">APRESEN</span>
               {editingDates === "presentation" ? (
                 <Input
                   type="date"
@@ -599,7 +599,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-1 w-full overflow-hidden">
               <div className="flex items-center gap-1 scale-[0.75] origin-left shrink-0">
                 <Switch
                   checked={card.showInTimeline !== false}
@@ -611,7 +611,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
               </div>
               <button
                 onClick={() => setShowDiarias(true)}
-                className="flex-1 px-2 py-1 rounded bg-secondary hover:bg-secondary/80 text-foreground transition-all cursor-pointer text-[9px] font-bold uppercase tracking-wide h-5 leading-none flex items-center justify-center shadow-lg border border-white/5 active:scale-95"
+                className="px-2 py-1 shrink-0 rounded bg-secondary hover:bg-secondary/80 text-foreground transition-all cursor-pointer text-[9px] font-bold uppercase tracking-wide h-5 leading-none flex items-center justify-center shadow-lg border border-white/5 active:scale-95"
               >
                 Crono
               </button>
