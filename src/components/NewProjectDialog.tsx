@@ -93,12 +93,15 @@ export default function NewProjectDialog({
       });
     }
 
+    const projectStatus = (!entryDate || !deliveryDate) ? "onboarding" : "wip";
+
     addCard({
       id: cardId,
       name: name.trim().toUpperCase(),
       client: client.trim(),
       entryDate,
       deliveryDate,
+      projectStatus,
       team,
       timelinePins: pins,
       showInTimeline: true

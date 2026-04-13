@@ -334,18 +334,18 @@ export default function NetworkGraph({
             const memberNode = nodes.find(n => n.label === teamMemberNameUppercase && n.type === "member");
             if (!memberNode) return;
 
+            const effectiveRole = roleMap[tm.role] || memberNode.role;
             if (projNode.type === "project" && projNode.memberSlots) {
-              const alreadyAdded = projNode.memberSlots.some(s => s.name === memberNode.label);
+              const alreadyAdded = projNode.memberSlots.some(s => s.role === effectiveRole && s.name === memberNode.label);
               if (!alreadyAdded) {
                 projNode.memberSlots.push({
-                  role: memberNode.role!,
-                  color: memberNode.color,
+                  role: effectiveRole!,
+                  color: effectiveRole ? ROLE_COLORS[effectiveRole] : memberNode.color,
                   name: memberNode.label
                 });
               }
             }
 
-            const effectiveRole = roleMap[tm.role] || memberNode.role;
             const linkId = `${memberNode.id}-${card.id}-${effectiveRole || "default"}`;
             
             if (!addedLinkIds.has(linkId)) {
