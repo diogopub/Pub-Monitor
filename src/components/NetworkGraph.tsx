@@ -841,7 +841,7 @@ export default function NetworkGraph({
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
 
       // Role-based curve offset to prevent overlap
-      const roleOffset = d.role === "creative" ? 0.7 : d.role === "architect" ? 0.9 : 1.1;
+      const roleOffset = d.role === "creative" ? 0.6 : d.role === "architect" ? 0.9 : 1.5;
       const dr = dist * roleOffset;
 
       // Offset start point to source border (member circles)

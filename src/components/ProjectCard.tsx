@@ -396,8 +396,16 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
   const allFeed = card.feed;
   const currentFeedIndex = Math.min(feedIndex, Math.max(0, allFeed.length - 1));
 
-  const isMissingDates = !card.entryDate || !card.deliveryDate;
-  const borderColorClass = isMissingDates ? "border-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]" : "border-border";
+  const isActive = card.active !== false;
+  const isMissingDates = isActive && (!card.entryDate || !card.deliveryDate);
+  const isDeclinedOrRejected = !isActive && (card.projectStatus === "declinado" || card.projectStatus === "proposta-recusada");
+
+  let borderColorClass = "border-border";
+  if (isDeclinedOrRejected) {
+    borderColorClass = "border-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]";
+  } else if (isMissingDates) {
+    borderColorClass = "border-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.3)]";
+  }
 
   return (
     <div className={`border ${borderColorClass} rounded-xl bg-card/60 backdrop-blur-sm overflow-hidden flex flex-col w-full max-w-[280px] transition-colors duration-300`}>
