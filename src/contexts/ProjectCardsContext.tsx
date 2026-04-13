@@ -41,7 +41,7 @@ export interface TimelinePin {
   completedBy?: (string | null)[]; // name of the user who checked each label
 }
 
-export type ProjectStatus = "em-desenvolvimento" | "onboarding" | "standby" | "aguardando-retorno";
+export type ProjectStatus = "em-desenvolvimento" | "onboarding" | "standby" | "aguardando-retorno" | "wip" | "inativo" | "declinado" | "proposta-recusada";
 
 export interface ProjectCardData {
   id: string;

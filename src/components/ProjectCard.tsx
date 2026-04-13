@@ -76,11 +76,20 @@ function getProgressColor(pct: number): string {
 }
 
 // ─── Project Status ───────────────────────────────────────────────
-const STATUS_CONFIG: Record<ProjectStatus, { label: string; color: string; next: ProjectStatus }> = {
-  "em-desenvolvimento": { label: "WORK IN PROGRESS", color: "#22c55e", next: "onboarding" },
-  "onboarding": { label: "ONBOARDING", color: "#eab308", next: "standby" },
-  "standby": { label: "STANDBY", color: "#f97316", next: "aguardando-retorno" },
-  "aguardando-retorno": { label: "VALIDAÇÃO CLIENTE", color: "#ef4444", next: "em-desenvolvimento" },
+const STATUS_CONFIG: Record<ProjectStatus | string, { label: string; color: string }> = {
+  // Ativos
+  "onboarding": { label: "ONBOARDING", color: "#eab308" },
+  "wip": { label: "WORK IN PROGRESS", color: "#22c55e" },
+  
+  // Inativos
+  "inativo": { label: "INATIVO", color: "#ef4444" },
+  "declinado": { label: "DECLINADO", color: "#ef4444" },
+  "proposta-recusada": { label: "PROPOSTA NÃO APROVADA", color: "#ef4444" },
+
+  // Legados
+  "em-desenvolvimento": { label: "WORK IN PROGRESS", color: "#22c55e" },
+  "standby": { label: "INATIVO", color: "#ef4444" },
+  "aguardando-retorno": { label: "WORK IN PROGRESS", color: "#22c55e" },
 };
 
 // ─── Team Role Badge ─────────────────────────────────────────────
@@ -403,21 +412,37 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
           <button
             onClick={() => {
               if (readOnly) return;
-              const current: ProjectStatus = card.projectStatus || "em-desenvolvimento";
-              updateCard(card.id, { projectStatus: STATUS_CONFIG[current].next });
+              let current: string = card.projectStatus || "wip";
+              // Tratar legados para não bugar o toggle
+              if (current === "em-desenvolvimento" || current === "aguardando-retorno") current = "wip";
+              if (current === "standby") current = "inativo";
+
+              const isActive = card.active !== false;
+              let nextStatus: ProjectStatus = "wip";
+
+              if (isActive) {
+                if (current === "wip") nextStatus = "onboarding";
+                else nextStatus = "wip";
+              } else {
+                if (current === "inativo") nextStatus = "declinado";
+                else if (current === "declinado") nextStatus = "proposta-recusada";
+                else nextStatus = "inativo";
+              }
+              
+              updateCard(card.id, { projectStatus: nextStatus });
             }}
             className={cn(
               "w-3 h-3 rounded-full shrink-0 transition-all shadow-md ring-2 ring-offset-2 ring-offset-card",
               !readOnly && "hover:scale-125 cursor-pointer"
             )}
             style={{
-              backgroundColor: STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color,
-              boxShadow: `0 0 0 2px ${STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color}55`,
+              backgroundColor: STATUS_CONFIG[card.projectStatus || "wip"]?.color || "#22c55e",
+              boxShadow: `0 0 0 2px ${STATUS_CONFIG[card.projectStatus || "wip"]?.color || "#22c55e"}55`,
             }}
             title={readOnly ? undefined : "Clique para mudar o status"}
           />
-          <span className="text-[10px] font-bold tracking-wide" style={{ color: STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].color }}>
-            {STATUS_CONFIG[card.projectStatus || "em-desenvolvimento"].label}
+          <span className="text-[10px] font-bold tracking-wide" style={{ color: STATUS_CONFIG[card.projectStatus || "wip"]?.color || "#22c55e" }}>
+            {STATUS_CONFIG[card.projectStatus || "wip"]?.label || "WORK IN PROGRESS"}
           </span>
         </div>
       </div>
@@ -458,7 +483,10 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
             <div className="flex items-center gap-1.5 mt-0.5">
               <Switch
                 checked={card.active !== false}
-                onCheckedChange={(checked) => updateCard(card.id, { active: checked })}
+                onCheckedChange={(checked) => {
+                  const newStatus = checked ? "wip" : "inativo";
+                  updateCard(card.id, { active: checked, projectStatus: newStatus as ProjectStatus });
+                }}
                 disabled={readOnly}
                 className={`scale-75 origin-left ${
                   card.active !== false
@@ -509,7 +537,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                     if (e.key === "Enter") handleSaveDates();
                     if (e.key === "Escape") setEditingDates(false);
                   }}
-                  className="h-5 text-[10px] w-24 px-1"
+                  className="h-5 text-[10px] md:text-[10px] w-24 px-1"
                   autoFocus
                 />
               ) : (
@@ -532,7 +560,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                   setEstimatedDailies(val === "" ? 0 : parseInt(val));
                 }}
                 onBlur={() => updateCard(card.id, { estimatedDailies })}
-                className="h-5 text-[10px] w-10 shrink-0 p-0 text-center bg-white/[0.05] border-none font-mono text-foreground focus-visible:ring-0 rounded drop-shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-5 text-[10px] md:text-[10px] font-bold w-10 shrink-0 p-0 text-center bg-white/[0.05] border-none font-mono text-foreground focus-visible:ring-0 rounded drop-shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 disabled={readOnly}
               />
             </div>
@@ -552,7 +580,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                     if (e.key === "Enter") handleSaveDates();
                     if (e.key === "Escape") setEditingDates(false);
                   }}
-                  className="h-5 text-[10px] w-24 px-1"
+                  className="h-5 text-[10px] md:text-[10px] w-24 px-1"
                   autoFocus
                 />
               ) : (
@@ -566,7 +594,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
             </div>
             <div className="flex items-center justify-between gap-1">
               <span className="text-muted-foreground whitespace-nowrap text-[8px] flex-1">DIÁRIAS UTIL.</span>
-              <span className="w-10 h-5 shrink-0 flex items-center justify-center font-mono text-[10px] text-foreground bg-white/[0.05] rounded border-none drop-shadow-sm">
+              <span className="w-10 h-5 shrink-0 flex items-center justify-center font-mono font-bold text-[10px] md:text-[10px] text-foreground bg-white/[0.05] rounded border-none drop-shadow-sm">
                 {(utilDailies % 1 === 0) ? utilDailies : utilDailies.toFixed(1)}
               </span>
             </div>
@@ -586,7 +614,7 @@ export default function ProjectCard({ card }: { card: ProjectCardData }) {
                     if (e.key === "Enter") handleSaveDates();
                     if (e.key === "Escape") setEditingDates(false);
                   }}
-                  className="h-5 text-[10px] w-24 px-1"
+                  className="h-5 text-[10px] md:text-[10px] w-24 px-1"
                   autoFocus
                 />
               ) : (
