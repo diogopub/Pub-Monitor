@@ -1328,10 +1328,28 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
   const { state: scheduleState, getWeekRoster, setWeekRoster, updateEntry, addEntry, removeEntry, getEntriesForCell } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const { googleAccessToken, loginWithGoogle, ensureGoogleToken, clearGoogleToken } = useAuth();
-  const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
+  const currentMondayRef = useRef(getMonday(new Date()));
+  const [currentMonday, setCurrentMonday] = useState(() => currentMondayRef.current);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
+
+  const [needsSync, setNeedsSync] = useState(false);
+  const isFirstRender = useRef(true);
+
+  const entriesHash = useMemo(() => {
+    return JSON.stringify(scheduleState.entries.map(e => ({
+      d: e.date, dur: e.duration, start: e.startSlot, mem: e.memberId, act: e.activityId, prj: e.projectId
+    })));
+  }, [scheduleState.entries]);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setNeedsSync(true);
+  }, [entriesHash]);
 
   const weekDays = useMemo(() => {
     if (viewMode === "month") {
@@ -1434,6 +1452,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       }
 
       toast.success("Sincronização forçada concluída com sucesso!", { id: toastId });
+      setNeedsSync(false);
     } catch (err: any) {
       console.error("Force sync failed:", err);
       toast.error("Falha na sincronização forçada.", { id: toastId });
@@ -1608,11 +1627,12 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
               <button
                 onClick={handleForceSync}
                 disabled={isForceSyncing}
-                className={`flex items-center gap-1.5 ml-2 pl-3 border-l border-border group transition-colors ${isForceSyncing ? 'opacity-50 cursor-not-allowed' : 'hover:text-primary'}`}
-                title="Sincronização Forçada: limpa e recria todos os eventos visíveis (exceto gestão)"
+                className={`flex items-center gap-1.5 ml-2 pl-2 border-l border-border group transition-all ${isForceSyncing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02] active:scale-95'}`}
+                title="Sincroniza eventos não processados e empurra alterações para as agendas"
               >
-                <RefreshCw className={`w-3 h-3 ${isForceSyncing ? 'animate-spin' : ''}`} />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Forçar Sync</span>
+                <div className={cn("w-2 h-2 rounded-full shadow-sm transition-colors duration-500", needsSync ? "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]" : "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]")} />
+                <RefreshCw className={`w-3 h-3 ${needsSync ? 'text-red-500' : 'text-green-500'} ${isForceSyncing ? 'animate-spin' : ''} transition-colors duration-500`} />
+                <span className={cn("text-[10px] font-bold uppercase tracking-wider transition-colors duration-500", needsSync ? "text-red-500" : "text-green-500")}>SYNC AGENDAS</span>
               </button>
             )}
           </div>
