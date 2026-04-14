@@ -47,7 +47,13 @@ export function computeAutoSlot(
   memberEntries.forEach(e => {
     const dStart = toUtcNoon(e.date);
     const dEnd = toUtcNoon(e.date);
-    dEnd.setDate(dEnd.getDate() + Math.ceil(e.duration || 1) - 1);
+    
+    // In the new 8-slot system (startSlot present), duration is in slots, so it always lasts 1 day.
+    // In the legacy system, duration was interpreted as days.
+    const isNewSystem = (e as any).startSlot !== undefined;
+    const durationDays = isNewSystem ? 1 : Math.ceil(e.duration || 1);
+    
+    dEnd.setDate(dEnd.getDate() + durationDays - 1);
     
     if (targetDate >= dStart && targetDate <= dEnd) {
       takenSlots.add(e.slotIndex || 0);
@@ -58,6 +64,7 @@ export function computeAutoSlot(
   while (takenSlots.has(autoSlot) && autoSlot < 10) autoSlot++;
   return autoSlot;
 }
+
 
 // ─── 8-Slot Schedule Grid (10:00–18:00) ──────────────────────────
 
