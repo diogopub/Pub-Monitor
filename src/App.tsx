@@ -11,6 +11,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { PermissionsProvider } from "./contexts/PermissionsContext";
 import Home from "./pages/Home";
 import Configuracoes from "./pages/Configuracoes";
+import ProjectTimelineEmbed from "./pages/ProjectTimelineEmbed";
 import { useAutoBackup } from "./hooks/useAutoBackup";
 import { LoginMenu } from "./components/LoginMenu";
 import { RemindersProvider } from "./contexts/RemindersContext";
@@ -25,6 +26,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/configuracoes"} component={Configuracoes} />
+      <Route path={"/embed/timeline/:projectId"} component={ProjectTimelineEmbed} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

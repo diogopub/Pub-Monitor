@@ -236,7 +236,7 @@ const LABEL_W = 220;     // px for label column (resized to minimize extra space
 const TIMELINE_Y = 80; // px from row top to the horizontal line
 const ROW_H = 160;     // total px height of each row (to fit labels below pins)
 
-function TimelineRow({
+export function TimelineRow({
   card,
   daysArray,
   updateCard,
