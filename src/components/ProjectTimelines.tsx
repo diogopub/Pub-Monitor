@@ -310,7 +310,7 @@ export function TimelineRow({
               >
                 {/* Day header */}
                 <div className={`absolute top-2 w-full text-center text-[9px] font-mono select-none pointer-events-none leading-tight
-                  ${isToday ? "text-primary font-bold" : "text-white/25"}`}>
+                  ${isToday ? "text-primary font-bold" : "text-white"}`}>
                   <div>{DAYS[dow]}</div>
                   <div>{d.getDate()}</div>
                   {isToday && <div className="w-1 h-1 bg-primary rounded-full mx-auto mt-0.5" />}

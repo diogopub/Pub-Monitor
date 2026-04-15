@@ -337,7 +337,7 @@ export default function DailyAllocationPanel({
                     } ${isToday ? "bg-primary/5" : ""}`}
                 >
                   {/* Day labels at top (Weekday + Number) */}
-                  <div className={`absolute top-2 w-full text-center text-[10px] font-mono select-none pointer-events-none leading-[1.3] ${isToday ? "text-primary font-bold" : "text-white/30"
+                  <div className={`absolute top-2 w-full text-center text-[10px] font-mono select-none pointer-events-none leading-[1.3] ${isToday ? "text-primary font-bold" : "text-white"
                     }`}>
                     <div className="uppercase">
                       {["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][dayOfWeek]}
