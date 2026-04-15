@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { useProjectCards, type TimelinePin } from "@/contexts/ProjectCardsContext";
 import { useSchedule } from "@/contexts/ScheduleContext";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Plus, X, Copy } from "lucide-react";
+import { toast } from "sonner";
 import { nanoid } from "nanoid";
 import {
   Select,
@@ -131,6 +132,12 @@ export default function DailyAllocationPanel({
     }
     return arr;
   }, [baseDate]);
+
+  const handleCopyEmbed = () => {
+    const url = `${window.location.origin}/embed/timeline/${cardId}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Link do embed copiado para a área de transferência!");
+  };
 
   const syncPinsToAgenda = (updatedPins: TimelinePin[]) => {
     const presenters = updatedPins.filter(p => p.labels.includes("APRESENTAÇÃO CLIENTE"));
@@ -289,6 +296,14 @@ export default function DailyAllocationPanel({
             </div>
           </div>
         </div>
+        <button
+          onClick={handleCopyEmbed}
+          className="text-[10px] bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/20 px-2 py-1 rounded text-blue-400 transition-colors mr-2 font-semibold uppercase tracking-wider flex items-center gap-1"
+          title="Copiar URL para o Miro"
+        >
+          <Copy className="w-3 h-3" />
+          Embed
+        </button>
         <button
           onClick={goToToday}
           className="text-[10px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-white transition-colors mr-2 font-semibold uppercase tracking-wider"
