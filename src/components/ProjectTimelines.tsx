@@ -229,7 +229,6 @@ function formatDateShort(d: Date): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-const DAYS_IN_VIEW = 14; // show 2 weeks at a time
 const LABEL_W = 220;     // px for label column (resized to minimize extra space)
 
 // ─── Row — one project timeline row ──────────────────────────────
@@ -331,8 +330,9 @@ export function TimelineRow({
         {(card.timelinePins || []).map((pin: any) => {
           const dayIdx = daysArray.findIndex((d) => formatISO(d) === pin.date);
           if (dayIdx < 0) return null;
-          const leftPct = (dayIdx / DAYS_IN_VIEW) * 100;
-          const colPct = 100 / DAYS_IN_VIEW;
+          const daysInView = daysArray.length;
+          const leftPct = (dayIdx / daysInView) * 100;
+          const colPct = 100 / daysInView;
           const labels: string[] = Array.isArray(pin.labels) && pin.labels.length > 0
             ? pin.labels
             : ["ENTRADA"];
@@ -440,7 +440,15 @@ export function TimelineRow({
 
 // ─── Main component ───────────────────────────────────────────────
 // ─── Main component ───────────────────────────────────────────────
-export default function ProjectTimelines() {
+export default function ProjectTimelines({
+  viewMode = "week",
+  currentDate,
+  onDateChange,
+}: {
+  viewMode?: "week" | "fortnight" | "month";
+  currentDate?: Date;
+  onDateChange?: (date: Date) => void;
+} = {}) {
   const { state, updateCard } = useProjectCards();
   const { currentUserRole } = usePermissions();
   const readOnly = currentUserRole === "viewer";
@@ -455,13 +463,42 @@ export default function ProjectTimelines() {
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // Navigation: base date = leftmost day in window
-  const [baseDate, setBaseDate] = useState(() => addDays(new Date(), -3));
+  const [internalBaseDate, setInternalBaseDate] = useState(() => {
+    const d = new Date();
+    const day = d.getDay() || 7;
+    if (day !== 1) d.setHours(-24 * (day - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
+  const baseDate = currentDate || internalBaseDate;
+  const setBaseDate = onDateChange || setInternalBaseDate;
 
   const daysArray = useMemo(() => {
-    return Array.from({ length: DAYS_IN_VIEW }, (_, i) => addDays(baseDate, i));
-  }, [baseDate]);
+    if (viewMode === "month") {
+      const y = baseDate.getFullYear();
+      const m = baseDate.getMonth();
+      const daysCount = new Date(y, m + 1, 0).getDate(); // days in month
+      return Array.from({ length: daysCount }, (_, i) => addDays(baseDate, i));
+    }
+    if (viewMode === "fortnight") {
+      return Array.from({ length: 12 }, (_, i) => addDays(baseDate, i));
+    }
+    return Array.from({ length: 5 }, (_, i) => addDays(baseDate, i));
+  }, [baseDate, viewMode]);
 
-  const goToToday = () => setBaseDate(addDays(new Date(), -3));
+  const goToToday = () => {
+    const today = new Date();
+    if (viewMode === "month") {
+      setBaseDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    } else {
+      const day = today.getDay() || 7;
+      const d = new Date(today);
+      if (day !== 1) d.setHours(-24 * (day - 1));
+      d.setHours(0, 0, 0, 0);
+      setBaseDate(d);
+    }
+  };
 
   // ─── Drag Logic ────────────────────────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -488,7 +525,7 @@ export default function ProjectTimelines() {
     if (Math.abs(walk) > threshold) {
       const daysToShift = Math.floor(walk / threshold);
       if (daysToShift !== 0) {
-        setBaseDate(prev => addDays(prev, daysToShift));
+        setBaseDate(addDays(baseDate, daysToShift));
         setStartX(x); // Reset start point to last handle
       }
     }
@@ -521,7 +558,7 @@ export default function ProjectTimelines() {
           {/* Navigation */}
           <div className="flex items-center gap-1 bg-black/20 rounded-md p-0.5 border border-white/5">
             <button
-              onClick={(e) => { e.stopPropagation(); setBaseDate((d) => addDays(d, -7)); }}
+              onClick={(e) => { e.stopPropagation(); setBaseDate(addDays(baseDate, -7)); }}
               className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Semana anterior"
             >
@@ -531,7 +568,7 @@ export default function ProjectTimelines() {
               {formatDateShort(daysArray[0])} – {formatDateShort(daysArray[daysArray.length - 1])}
             </span>
             <button
-              onClick={(e) => { e.stopPropagation(); setBaseDate((d) => addDays(d, 7)); }}
+              onClick={(e) => { e.stopPropagation(); setBaseDate(addDays(baseDate, 7)); }}
               className="p-1.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition-colors"
               title="Próxima semana"
             >

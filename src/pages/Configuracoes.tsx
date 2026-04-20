@@ -384,6 +384,13 @@ function BackupSettingsSection() {
 export default function Configuracoes() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"week" | "fortnight" | "month">("week");
+  const [currentDate, setCurrentDate] = useState(() => {
+    const d = new Date();
+    const day = d.getDay() || 7;
+    if (day !== 1) d.setHours(-24 * (day - 1));
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const { reminders } = useReminders();
   const { currentUserRole, loading } = usePermissions();
   const [, setLocation] = useLocation();
@@ -437,9 +444,17 @@ export default function Configuracoes() {
                 })}
               </div>
             </div>
-            <WeeklySchedule viewMode={viewMode} />
+            <WeeklySchedule 
+              viewMode={viewMode} 
+              currentDate={currentDate}
+              onDateChange={setCurrentDate}
+            />
           </section>
-          <ProjectTimelines />
+          <ProjectTimelines 
+            viewMode={viewMode}
+            currentDate={currentDate}
+            onDateChange={setCurrentDate}
+          />
           <ProjectCardsSection onOpenDialog={() => setDialogOpen(true)} />
           <PermissionsSettingsSection />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 sm:p-6 pt-0 border-t border-border mt-8">

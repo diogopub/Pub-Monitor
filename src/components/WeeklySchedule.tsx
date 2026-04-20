@@ -1323,13 +1323,23 @@ function AddMemberToWeekPopover({
   );
 }
 
-export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week" | "fortnight" | "month" }) {
+export default function WeeklySchedule({ 
+  viewMode = "week",
+  currentDate,
+  onDateChange
+}: { 
+  viewMode?: "week" | "fortnight" | "month";
+  currentDate?: Date;
+  onDateChange?: (date: Date) => void;
+}) {
   const { state: networkState } = useNetwork();
   const { state: scheduleState, getWeekRoster, setWeekRoster, updateEntry, addEntry, removeEntry, getEntriesForCell } = useSchedule();
   const { state: cardsState } = useProjectCards();
   const { googleAccessToken, loginWithGoogle, ensureGoogleToken, clearGoogleToken } = useAuth();
   const currentMondayRef = useRef(getMonday(new Date()));
-  const [currentMonday, setCurrentMonday] = useState(() => currentMondayRef.current);
+  const [internalCurrentMonday, setInternalCurrentMonday] = useState(() => currentMondayRef.current);
+  const currentMonday = currentDate || internalCurrentMonday;
+  const setCurrentMonday = onDateChange || setInternalCurrentMonday;
   const [isSyncing, setIsSyncing] = useState(false);
 
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
@@ -1517,8 +1527,8 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
     return result.sort().join("   |   ");
   }, [scheduleState.entries, cardsState.cards, networkState.members]);
 
-  const goToPrevPeriod = () => setCurrentMonday((m) => addDays(m, -7));
-  const goToNextPeriod = () => setCurrentMonday((m) => addDays(m, 7));
+  const goToPrevPeriod = () => setCurrentMonday(addDays(currentMonday, -7));
+  const goToNextPeriod = () => setCurrentMonday(addDays(currentMonday, 7));
   const goToToday = () => setCurrentMonday(getMonday(new Date()));
 
   const today = formatDate(new Date());
@@ -1558,7 +1568,7 @@ export default function WeeklySchedule({ viewMode = "week" }: { viewMode?: "week
       
       if (daysToShift !== 0) {
         // Shift one day at a time for each threshold unit
-        setCurrentMonday(prev => addDays(prev, daysToShift));
+        setCurrentMonday(addDays(currentMonday, daysToShift));
         setStartX(x); // Reset to allow continuous dragging
       }
     }
