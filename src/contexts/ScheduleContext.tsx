@@ -96,6 +96,7 @@ export interface ScheduleState {
   entries: ScheduleEntry[];
   specialRows: SpecialRow[];
   weeklyRosters: Record<string, string[]>;
+  colorMode: "activity" | "project";
 }
 
 interface ScheduleContextType {
@@ -111,6 +112,7 @@ interface ScheduleContextType {
   setState: (state: ScheduleState) => void;
   getWeekRoster: (weekKey: string, allMemberIds: string[]) => string[];
   setWeekRoster: (weekKey: string, memberIds: string[]) => void;
+  setColorMode: (mode: "activity" | "project") => void;
 }
 
 const ENTRIES_COLLECTION = "schedule_entries";
@@ -133,13 +135,19 @@ function loadLocalState(): ScheduleState {
           entries: uniqueEntries,
           specialRows: parsed.specialRows || DEFAULT_SPECIAL_ROWS,
           weeklyRosters: parsed.weeklyRosters || {},
+          colorMode: parsed.colorMode || "activity",
         };
       }
     }
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
-  return { entries: [], specialRows: DEFAULT_SPECIAL_ROWS, weeklyRosters: {} };
+  return { 
+    entries: [], 
+    specialRows: DEFAULT_SPECIAL_ROWS, 
+    weeklyRosters: {},
+    colorMode: "activity"
+  };
 }
 
 function saveLocalState(state: ScheduleState) {
@@ -464,7 +472,7 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   return (
     <ScheduleContext.Provider value={{
       state, addEntry, updateEntry, removeEntry, removeEntriesByCell, getEntriesForCell,
-      addSpecialRow, removeSpecialRow, updateSpecialRow, setState, getWeekRoster, setWeekRoster,
+      addSpecialRow, removeSpecialRow, updateSpecialRow, setState, getWeekRoster, setWeekRoster, setColorMode,
     }}>
       {children}
     </ScheduleContext.Provider>

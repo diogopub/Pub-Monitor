@@ -21,10 +21,14 @@ function FooterTaskBar({
   entry,
   act,
   proj,
+  colorMode,
+  projectColorMap,
 }: {
   entry: any;
   act: any;
   proj: any;
+  colorMode: "activity" | "project";
+  projectColorMap: Map<string, { color: string; textColor: string }>;
 }) {
   const { startSlot, durationSlots } = entryToSlots(entry);
 
@@ -36,12 +40,20 @@ function FooterTaskBar({
 
   const label = entry.customLabel || (proj ? proj.name : act.label);
 
+  const effectiveActColor = (colorMode === "project" && entry.projectId && projectColorMap.has(entry.projectId) && entry.activityId !== "dayoff")
+    ? projectColorMap.get(entry.projectId)!.color
+    : act.color;
+    
+  const effectiveTextColor = (colorMode === "project" && entry.projectId && projectColorMap.has(entry.projectId) && entry.activityId !== "dayoff")
+    ? projectColorMap.get(entry.projectId)!.textColor
+    : act.textColor;
+
   return (
     <div
       className="absolute flex items-center rounded text-[9px] font-semibold leading-tight z-10"
       style={{
-        backgroundColor: act.color,
-        color: act.textColor,
+        backgroundColor: effectiveActColor,
+        color: effectiveTextColor,
         top: `${rowTop}px`,
         left: `${leftPct}%`,
         width: `${widthPct}%`,
@@ -99,7 +111,7 @@ export default function ScheduleFooter({
   highlightMemberId,
 }: ScheduleFooterProps) {
   const { state: networkState } = useNetwork();
-  const { state: scheduleState, getEntriesForCell, getWeekRoster } = useSchedule();
+  const { state: scheduleState, getEntriesForCell, getWeekRoster, setColorMode } = useSchedule();
   const { state: cardsState } = useProjectCards();
 
   const [currentMonday, setCurrentMonday] = useState(() => getMonday(new Date()));
@@ -140,6 +152,36 @@ export default function ScheduleFooter({
 
   const today = formatDate(new Date());
   const weekKey = useMemo(() => formatDate(currentMonday), [currentMonday]);
+
+  // ─── Generate Dynamic Project Colors ────────────────────────────────
+  const projectColorMap = useMemo(() => {
+    if (scheduleState.colorMode !== "project") return new Map<string, { color: string; textColor: string }>();
+
+    const visibleProjectIds = new Set<string>();
+    weekDays.forEach(day => {
+      const dateStr = formatDate(day);
+      const allEntries = scheduleState.entries.filter(e => e.date === dateStr);
+      allEntries.forEach(entry => {
+        if (entry.projectId && entry.activityId !== "dayoff") {
+          visibleProjectIds.add(entry.projectId);
+        }
+      });
+    });
+
+    const map = new Map<string, { color: string; textColor: string }>();
+    const availableColors = ACTIVITY_TYPES.filter(a => a.id !== "dayoff");
+    let colorIndex = 0;
+
+    Array.from(visibleProjectIds).sort().forEach(pId => {
+      map.set(pId, {
+        color: availableColors[colorIndex % availableColors.length].color,
+        textColor: availableColors[colorIndex % availableColors.length].textColor,
+      });
+      colorIndex++;
+    });
+
+    return map;
+  }, [scheduleState.colorMode, weekDays, scheduleState.entries]);
 
   // ─── Linhas de membros (mesmo roster do WeeklySchedule) ───────
   const memberRows = useMemo(() => {
@@ -224,7 +266,7 @@ export default function ScheduleFooter({
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 text-white/50 hover:text-white/80 hover:bg-white/10"
-                          onClick={() => setCurrentMonday(m => addDays(m, -7))}
+                          onClick={(e) => { e.stopPropagation(); setCurrentMonday(m => addDays(m, -7)); }}
                         >
                           <ChevronLeft className="w-3 h-3" />
                         </Button>
@@ -232,10 +274,21 @@ export default function ScheduleFooter({
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 text-white/50 hover:text-white/80 hover:bg-white/10"
-                          onClick={() => setCurrentMonday(m => addDays(m, 7))}
+                          onClick={(e) => { e.stopPropagation(); setCurrentMonday(m => addDays(m, 7)); }}
                         >
                           <ChevronRight className="w-3 h-3" />
                         </Button>
+                        <button
+                          className="ml-1 h-5 px-1 rounded hover:bg-white/10 text-white/40 flex items-center gap-1 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setColorMode(scheduleState.colorMode === "activity" ? "project" : "activity");
+                          }}
+                          title={scheduleState.colorMode === "activity" ? "Mudar para Cores por Projeto" : "Mudar para Cores por Tarefa"}
+                        >
+                          <div className={`w-1.5 h-1.5 rounded-full ${scheduleState.colorMode === "project" ? "bg-primary shadow-[0_0_5px_rgba(var(--primary),0.5)]" : "bg-white/20"}`} />
+                          <span className="text-[7px] font-bold uppercase tracking-tighter">Cor</span>
+                        </button>
                       </div>
                     </th>
                     {weekDays.map(day => {
@@ -371,6 +424,8 @@ export default function ScheduleFooter({
                                       entry={entry}
                                       act={activity}
                                       proj={proj}
+                                      colorMode={scheduleState.colorMode}
+                                      projectColorMap={projectColorMap}
                                     />
                                   );
                                 })}

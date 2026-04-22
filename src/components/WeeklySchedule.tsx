@@ -513,7 +513,7 @@ function TaskBar({
       draggable={!isResizingRef.current && !showDescEditor}
       onDragStart={handleDragStart}
       className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm select-none
-        ${isResizing ? "z-50 ring-2 ring-primary/70 opacity-90" : "z-10"}
+        ${isResizing ? "z-50 ring-2 ring-primary/70 opacity-90" : (showDescEditor || showTooltip) ? "z-[60]" : "z-10"}
         ${act.id === "entrega-pub" ? "border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)]" : ""}
         ${!isResizing ? "hover:-translate-y-[1px] transition-transform cursor-grab active:cursor-grabbing" : "cursor-col-resize"}`}
       style={{
@@ -670,6 +670,8 @@ function ScheduleCell({
   date,
   isEntradaEntrega = false,
   viewMode,
+  colorMode = "activity",
+  projectColorMap,
   debounceTimers,
   syncingIds,
   addToSyncing,
@@ -679,6 +681,8 @@ function ScheduleCell({
   date: string;
   isEntradaEntrega?: boolean;
   viewMode?: "week" | "fortnight" | "month";
+  colorMode?: "activity" | "project";
+  projectColorMap?: Map<string, { color: string; textColor: string }>;
   debounceTimers: React.MutableRefObject<Record<string, NodeJS.Timeout>>;
   syncingIds: Set<string>;
   addToSyncing: (id: string) => void;
@@ -1144,11 +1148,19 @@ function ScheduleCell({
         >
           {entries.map((entry) => {
             const allActs = isEntradaEntrega ? ENTRADAS_ACTIVITIES : ACTIVITY_TYPES;
-            const act = allActs.find((a) => a.id === entry.activityId) || ACTIVITY_TYPES.find((a) => a.id === entry.activityId);
+            const baseAct = allActs.find((a) => a.id === entry.activityId) || ACTIVITY_TYPES.find((a) => a.id === entry.activityId);
             const proj = entry.projectId
               ? cardsState.cards.find((c) => c.id === entry.projectId)
               : null;
-            if (!act) return null;
+            if (!baseAct) return null;
+
+            const act = { ...baseAct };
+            if (colorMode === "project" && entry.projectId && projectColorMap?.has(entry.projectId) && act.id !== "dayoff") {
+              const pColor = projectColorMap.get(entry.projectId)!;
+              act.color = pColor.color;
+              act.textColor = pColor.textColor;
+            }
+
             return (
               <TaskBar
                 key={entry.id}
@@ -1538,9 +1550,37 @@ export default function WeeklySchedule({
     }
   }, [viewMode]);
 
-  // ─── Shared Helpers (local proxies) ─────────────────────────────
   // We keep these names for easier integration with existing code in this component
   const nanoidLocal = () => Math.random().toString(36).slice(2, 10);
+
+  // ─── Generate Dynamic Project Colors ────────────────────────────────
+  const projectColorMap = useMemo(() => {
+    if (scheduleState.colorMode !== "project") return new Map<string, { color: string; textColor: string }>();
+
+    const visibleProjectIds = new Set<string>();
+    weekDays.forEach(day => {
+      const dateStr = formatDate(day);
+      scheduleState.entries.forEach(entry => {
+        if (entry.date === dateStr && entry.projectId && entry.activityId !== "dayoff") {
+          visibleProjectIds.add(entry.projectId);
+        }
+      });
+    });
+
+    const map = new Map<string, { color: string; textColor: string }>();
+    const availableColors = ACTIVITY_TYPES.filter(a => a.id !== "dayoff");
+    let colorIndex = 0;
+
+    Array.from(visibleProjectIds).sort().forEach(pId => {
+      map.set(pId, {
+        color: availableColors[colorIndex % availableColors.length].color,
+        textColor: availableColors[colorIndex % availableColors.length].textColor,
+      });
+      colorIndex++;
+    });
+
+    return map;
+  }, [scheduleState.colorMode, weekDays, scheduleState.entries]);
 
   // ─── Debounce & Lock State ──────────────────────────────────────────
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
@@ -1950,6 +1990,8 @@ export default function WeeklySchedule({
                           date={dateStr} 
                           isEntradaEntrega={isEntrada} 
                           viewMode={viewMode}
+                          colorMode={scheduleState.colorMode}
+                          projectColorMap={projectColorMap}
                           debounceTimers={debounceTimers}
                           syncingIds={syncingIds}
                           addToSyncing={addToSyncing}

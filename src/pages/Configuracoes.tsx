@@ -12,6 +12,7 @@ import { useNetwork } from "@/contexts/NetworkContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { Palette } from "lucide-react";
 import { usePermissions, UserRole } from "@/contexts/PermissionsContext";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
@@ -393,6 +394,7 @@ export default function Configuracoes() {
   });
   const { reminders } = useReminders();
   const { currentUserRole, loading } = usePermissions();
+  const { state: scheduleState, setColorMode } = useSchedule();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -420,28 +422,46 @@ export default function Configuracoes() {
                 </h2>
               </div>
               <div className="flex items-center gap-6 ml-4">
-                {(['week', 'fortnight', 'month'] as const).map((mode) => {
-                  const labels = { week: 'Semana', fortnight: 'Quinzena', month: 'Mês' };
-                  const active = viewMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      onClick={() => setViewMode(mode)}
-                      className="flex flex-col items-center gap-1 group transition-all"
-                    >
-                      <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                        active 
-                          ? 'bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.6)] scale-110' 
-                          : 'bg-white group-hover:bg-white/80'
-                      }`} />
-                      <span className={`text-[11px] font-medium transition-colors ${
-                        active ? 'text-white' : 'text-white/40 group-hover:text-white/60'
-                      }`}>
-                        {labels[mode]}
-                      </span>
-                    </button>
-                  );
-                })}
+                {/* Visualização de tempo */}
+                <div className="flex items-center gap-4">
+                  {(['week', 'fortnight', 'month'] as const).map((mode) => {
+                    const labels = { week: 'Semana', fortnight: 'Quinzena', month: 'Mês' };
+                    const active = viewMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => setViewMode(mode)}
+                        className="flex flex-col items-center gap-1 group transition-all"
+                      >
+                        <div className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                          active 
+                            ? 'bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.6)] scale-110' 
+                            : 'bg-white group-hover:bg-white/80'
+                        }`} />
+                        <span className={`text-[11px] font-medium transition-colors ${
+                          active ? 'text-white' : 'text-white/40 group-hover:text-white/60'
+                        }`}>
+                          {labels[mode]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="w-px h-6 bg-border mx-2" />
+
+                {/* Toggle Cor */}
+                <div className="flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-[11px] font-medium text-white/60">
+                    Cores: {scheduleState.colorMode === "activity" ? "Tarefa" : "Projeto"}
+                  </span>
+                  <Switch
+                    checked={scheduleState.colorMode === "project"}
+                    onCheckedChange={(c) => setColorMode(c ? "project" : "activity")}
+                    className="scale-90"
+                  />
+                </div>
               </div>
             </div>
             <WeeklySchedule 
