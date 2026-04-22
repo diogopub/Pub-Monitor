@@ -469,6 +469,10 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     }
   }, [canWrite]);
 
+  const setColorMode = useCallback((mode: "activity" | "project") => {
+    setStateInternal(prev => ({ ...prev, colorMode: mode }));
+  }, []);
+
   return (
     <ScheduleContext.Provider value={{
       state, addEntry, updateEntry, removeEntry, removeEntriesByCell, getEntriesForCell,
