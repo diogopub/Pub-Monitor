@@ -1155,7 +1155,7 @@ function ScheduleCell({
             if (!baseAct) return null;
 
             const act = { ...baseAct };
-            if (colorMode === "project" && entry.projectId && projectColorMap?.has(entry.projectId) && act.id !== "dayoff") {
+            if (colorMode === "project" && !isEntradaEntrega && entry.projectId && projectColorMap?.has(entry.projectId) && act.id !== "dayoff") {
               const pColor = projectColorMap.get(entry.projectId)!;
               act.color = pColor.color;
               act.textColor = pColor.textColor;
