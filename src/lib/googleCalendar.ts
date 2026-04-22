@@ -32,7 +32,8 @@ export async function pushEventToGoogleCalendar(
   entry: { startDate: string; duration?: number; startOffset?: number },
   projectName: string,
   memberEmail: string,
-  token: string
+  token: string,
+  userDescription?: string
 ): Promise<{ ids: string[]; error?: string }> {
   const eventIds: string[] = [];
   const targetCalendar = resolveCalendar(memberEmail);
@@ -65,11 +66,15 @@ export async function pushEventToGoogleCalendar(
         const startDT = `${currentDateStr}T${String(startHour).padStart(2, '0')}:00:00`;
         const endDT   = `${currentDateStr}T${String(endHour).padStart(2, '0')}:00:00`;
 
+        const descriptionBody = userDescription
+          ? `${userDescription}\n\n---\n${MONITOR_EVENT_TAG}`
+          : MONITOR_EVENT_TAG;
+
         const gEvent = {
           summary: projectName,
           start: { dateTime: startDT, timeZone: TZ },
           end:   { dateTime: endDT,   timeZone: TZ },
-          description: MONITOR_EVENT_TAG,
+          description: descriptionBody,
           reminders: { useDefault: false, overrides: [] },
         };
 
@@ -199,8 +204,8 @@ export async function purgeMonitorEventsInRange(
       const data = await res.json();
       if (!data.items) break;
 
-      const monitorEvents = data.items.filter((ev: any) => 
-        ev.description === MONITOR_EVENT_TAG
+      const monitorEvents = data.items.filter((ev: any) =>
+        ev.description?.includes(MONITOR_EVENT_TAG)
       );
 
       monitorEvents.forEach((ev: any) => {
@@ -234,5 +239,49 @@ export async function purgeMonitorEventsInRange(
   } catch (error) {
     if (error instanceof Error && error.message.includes("AuthError")) throw error;
     return { deleted: 0, failed: 0 };
+  }
+}
+
+/**
+ * Atualiza a descrição de evento(s) existentes no Google Calendar via PATCH.
+ * Usado quando o usuário edita a descrição de uma atividade na agenda.
+ */
+export async function updateEventDescriptionOnGCal(
+  eventIds: string[],
+  memberEmail: string,
+  token: string,
+  userDescription: string
+): Promise<{ error?: string }> {
+  const targetCalendar = resolveCalendar(memberEmail);
+  const descriptionBody = userDescription
+    ? `${userDescription}\n\n---\n${MONITOR_EVENT_TAG}`
+    : MONITOR_EVENT_TAG;
+
+  try {
+    for (const eventId of eventIds.filter(Boolean)) {
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(targetCalendar)}/events/${encodeURIComponent(eventId)}?sendUpdates=none`,
+        {
+          method: "PATCH",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ description: descriptionBody }),
+        }
+      );
+
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("AuthError: 401");
+        if (res.status === 404 || res.status === 410) continue; // evento já deletado, ignora
+        const body = await res.json().catch(() => ({}));
+        const msg = body.error?.message || res.statusText;
+        return { error: `${res.status}: ${msg}` };
+      }
+    }
+    return {};
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("AuthError")) throw error;
+    return { error: error instanceof Error ? error.message : "Unknown error" };
   }
 }

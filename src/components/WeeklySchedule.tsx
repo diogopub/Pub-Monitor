@@ -7,7 +7,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork, ROLE_COLORS, type MemberRole } from "@/contexts/NetworkContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { pushEventToGoogleCalendar, deleteEventsFromGoogleCalendar, purgeMonitorEventsInRange } from "@/lib/googleCalendar";
+import { pushEventToGoogleCalendar, deleteEventsFromGoogleCalendar, purgeMonitorEventsInRange, updateEventDescriptionOnGCal } from "@/lib/googleCalendar";
 import {
   useSchedule,
   ACTIVITY_TYPES,
@@ -316,6 +316,7 @@ function TaskBar({
   removeEntry,
   updateEntry,
   viewMode,
+  onDescriptionChange,
 }: {
   entry: ScheduleEntry;
   act: ActivityType;
@@ -323,12 +324,51 @@ function TaskBar({
   removeEntry: (id: string) => void;
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => Promise<void> | void;
   viewMode?: "week" | "fortnight" | "month";
+  onDescriptionChange?: (entryId: string, description: string) => void;
 }) {
   const isMonth = viewMode === "month";
   // Live preview during resize: { startSlot, durationSlots } | null
   const [preview, setPreview] = useState<{ startSlot: number; durationSlots: number } | null>(null);
   const isResizingRef = useRef(false);
   const barRef = useRef<HTMLDivElement>(null);
+
+  // ── Description state ─────────────────────────────────────────
+  const [showDescEditor, setShowDescEditor] = useState(false);
+  const [descText, setDescText] = useState(entry.description || "");
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const descInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keep descText synced if entry.description changes externally
+  useEffect(() => {
+    if (!showDescEditor) setDescText(entry.description || "");
+  }, [entry.description, showDescEditor]);
+
+  // Focus textarea when editor opens
+  useEffect(() => {
+    if (showDescEditor && descInputRef.current) {
+      descInputRef.current.focus();
+    }
+  }, [showDescEditor]);
+
+  const handleDescSave = () => {
+    const trimmed = descText.trim();
+    if (trimmed !== (entry.description || "")) {
+      onDescriptionChange?.(entry.id, trimmed);
+    }
+    setShowDescEditor(false);
+  };
+
+  // ── Tooltip hover handlers ────────────────────────────────────
+  const handleMouseEnter = () => {
+    if (!entry.description || showDescEditor) return;
+    tooltipTimerRef.current = setTimeout(() => setShowTooltip(true), 400);
+  };
+  const handleMouseLeave = () => {
+    if (tooltipTimerRef.current) clearTimeout(tooltipTimerRef.current);
+    tooltipTimerRef.current = null;
+    setShowTooltip(false);
+  };
 
   // ── Helpers ────────────────────────────────────────────────────
   const getCellRect = () => barRef.current?.closest("td")?.getBoundingClientRect() ?? null;
@@ -423,7 +463,7 @@ function TaskBar({
 
   // ── HTML5 drag-to-move (blocked during resize) ─────────────────
   const handleDragStart = (e: React.DragEvent) => {
-    if (isResizingRef.current || isMonth) { e.preventDefault(); return; }
+    if (isResizingRef.current || isMonth || showDescEditor) { e.preventDefault(); return; }
     e.stopPropagation();
     const { startSlot } = entryToSlots(entry);
 
@@ -465,11 +505,12 @@ function TaskBar({
   const barHeight = isMonth ? 5 : (act.id === "entrega-pub" ? 18 : 20);
   
   const label = entry.customLabel || (proj ? proj.name : act.label);
+  const hasDescription = !!entry.description;
 
   return (
     <div
       ref={barRef}
-      draggable={!isResizingRef.current}
+      draggable={!isResizingRef.current && !showDescEditor}
       onDragStart={handleDragStart}
       className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm select-none
         ${isResizing ? "z-50 ring-2 ring-primary/70 opacity-90" : "z-10"}
@@ -485,7 +526,15 @@ function TaskBar({
         opacity: isMonth ? 0.9 : 1,
       }}
       title={isMonth ? label : undefined}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isMonth && !isResizingRef.current) {
+          setShowDescEditor(prev => !prev);
+          setShowTooltip(false);
+        }
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* ── Floating Time Labels (Resizing) ─── */}
       {isResizing && (
@@ -499,6 +548,73 @@ function TaskBar({
         </>
       )}
 
+      {/* ── Description Tooltip (hover) ─── */}
+      {showTooltip && hasDescription && !showDescEditor && !isMonth && (
+        <div
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-[9999] pointer-events-none"
+          style={{ minWidth: "120px", maxWidth: "220px" }}
+        >
+          <div className="bg-gray-900/95 text-white text-[10px] leading-snug px-2.5 py-1.5 rounded-md shadow-xl border border-white/10 whitespace-pre-wrap break-words">
+            {entry.description}
+          </div>
+          <div className="w-2 h-2 bg-gray-900/95 rotate-45 mx-auto -mt-1 border-r border-b border-white/10" />
+        </div>
+      )}
+
+      {/* ── Description Editor (click) ─── */}
+      {showDescEditor && !isMonth && (
+        <div
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[9999]"
+          style={{ width: "200px" }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div className="bg-popover border border-border rounded-lg shadow-2xl p-2 space-y-1.5">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+              Descrição
+            </p>
+            <textarea
+              ref={descInputRef}
+              value={descText}
+              onChange={(e) => setDescText(e.target.value)}
+              placeholder="Adicione uma descrição..."
+              rows={3}
+              className="w-full bg-secondary/50 rounded px-2 py-1.5 text-[11px] text-foreground outline-none focus:ring-1 focus:ring-primary/50 border border-transparent focus:border-primary/30 resize-none leading-tight placeholder:text-muted-foreground/60"
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleDescSave();
+                }
+                if (e.key === "Escape") {
+                  setDescText(entry.description || "");
+                  setShowDescEditor(false);
+                }
+              }}
+              draggable={false}
+            />
+            <div className="flex gap-1">
+              <button
+                onClick={(e) => { e.stopPropagation(); handleDescSave(); }}
+                className="flex-1 text-center py-1 rounded text-[10px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Salvar
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDescText(entry.description || "");
+                  setShowDescEditor(false);
+                }}
+                className="px-2 py-1 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── LEFT resize handle ─── */}
       <div
         className="absolute left-0 top-0 bottom-0 w-2.5 flex items-center justify-center cursor-ew-resize hover:bg-black/20 rounded-l border-r border-white/20 z-20 opacity-0 group-hover/bar:opacity-100 transition-opacity"
@@ -507,10 +623,13 @@ function TaskBar({
         <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
       </div>
 
-      {/* ── Label ─── */}
+      {/* ── Label + Description indicator ─── */}
       {!isMonth && (
-        <div className="flex-1 truncate text-center px-3 pointer-events-none select-none">
-          {label}
+        <div className="flex-1 flex items-center justify-center gap-0.5 truncate px-3 pointer-events-none select-none">
+          <span className="truncate">{label}</span>
+          {hasDescription && (
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-50 shrink-0 ml-0.5" title="Possui descrição" />
+          )}
         </div>
       )}
 
@@ -599,7 +718,8 @@ function ScheduleCell({
     startOffset: number,   // 0 = manhã (esquerda), 0.5 = tarde (direita)
     membId: string,
     projectId?: string,
-    customLabel?: string
+    customLabel?: string,
+    description?: string
   ): Promise<string[]> => {
     if (isEntradaEntrega) return [];
     
@@ -622,7 +742,8 @@ function ScheduleCell({
         { startDate: entryDate, duration, startOffset },
         projectName,
         memberEmail,
-        validToken
+        validToken,
+        description
       );
       if (response.error) {
         if (response.error.includes("401")) {
@@ -803,7 +924,7 @@ function ScheduleCell({
         // 2. Sincronizar em background
         (async () => {
           try {
-            const googleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
+            const googleIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel, sourceEntry.description);
             if (googleIds.length > 0) {
               updateEntry(newId, { googleEventIds: googleIds });
             }
@@ -841,7 +962,7 @@ function ScheduleCell({
             }
 
             // Criar novos
-            const newIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel);
+            const newIds = await pushToCalendar(date, targetDurationOffset, targetStartOffset, memberId, sourceEntry.projectId, sourceEntry.customLabel, sourceEntry.description);
             updateEntry(data.entryId, { googleEventIds: newIds });
           } catch (err: any) {
             console.error("GCal move transition error:", err);
@@ -906,7 +1027,7 @@ function ScheduleCell({
           // Criar novos
           const gCalDuration = toGCalDuration(originalEntry, newDuration, newStartSlot);
           const gCalStartOffset = toGCalStartOffset(originalEntry, newStartSlot);
-          const newGoogleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, originalEntry.projectId, originalEntry.customLabel);
+          const newGoogleIds = await pushToCalendar(newDate, gCalDuration, gCalStartOffset, newMemberId, originalEntry.projectId, originalEntry.customLabel, originalEntry.description);
           
           updateEntry(entryId, { googleEventIds: newGoogleIds });
         } catch (err: any) {
@@ -965,6 +1086,37 @@ function ScheduleCell({
     }
   };
 
+  const handleDescriptionChange = async (entryId: string, description: string) => {
+    const entry = scheduleState.entries.find(e => e.id === entryId);
+    if (!entry) return;
+
+    // 1. Atualização Otimista
+    updateEntry(entryId, { description });
+
+    // 2. Sincronização com Google Calendar
+    if (entry.googleEventIds?.length) {
+      if (debounceTimers.current[`desc_${entryId}`]) clearTimeout(debounceTimers.current[`desc_${entryId}`]);
+
+      debounceTimers.current[`desc_${entryId}`] = setTimeout(async () => {
+        try {
+          const t = await ensureGoogleToken();
+          if (!t) throw new Error("Sem autorização Google");
+
+          const memberEmail = getMemberEmail(entry.memberId, networkState.members);
+          if (memberEmail) {
+             const res = await updateEventDescriptionOnGCal(entry.googleEventIds!, memberEmail, t, description);
+             if (res.error) throw new Error(res.error);
+          }
+        } catch (err: any) {
+          console.error("GCal update description error:", err);
+          toast.error("Erro ao sincronizar descrição com o Google.");
+        } finally {
+          delete debounceTimers.current[`desc_${entryId}`];
+        }
+      }, 500);
+    }
+  };
+
   const handleClose = () => {
     setOpen(false);
     setStep("activity");
@@ -1006,6 +1158,7 @@ function ScheduleCell({
                 removeEntry={handleRemoveEntry}
                 updateEntry={handleUpdateEntry}
                 viewMode={viewMode}
+                onDescriptionChange={handleDescriptionChange}
               />
             );
           })}
@@ -1452,7 +1605,8 @@ export default function WeeklySchedule({
             { startDate: entry.date, duration: gCalDuration, startOffset: gCalStartOffset },
             projectName,
             member.email!,
-            t
+            t,
+            entry.description
           );
 
           if (response.ids.length > 0) {

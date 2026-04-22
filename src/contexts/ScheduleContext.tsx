@@ -55,6 +55,7 @@ export interface ScheduleEntry {
   activityId: string;
   projectId?: string;
   customLabel?: string;
+  description?: string; // user-editable description, also synced to GCal
   duration?: number;    // int slots [1–8] when startSlot is set; float fraction otherwise (legacy)
   slotIndex?: number;   // row stacking index: 0, 1, 2
   startOffset?: number; // kept for GCal / legacy; = startSlot / SCHEDULE_SLOTS when new system
@@ -68,6 +69,7 @@ export interface AddEntryPayload {
   activityId: string;
   projectId?: string;
   customLabel?: string;
+  description?: string;
   duration?: number;
   slotIndex?: number;
   startOffset?: number;
