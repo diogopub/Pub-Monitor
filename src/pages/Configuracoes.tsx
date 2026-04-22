@@ -9,6 +9,7 @@ import ProjectTimelines from "@/components/ProjectTimelines";
 import NewProjectDialog from "@/components/NewProjectDialog";
 import { useProjectCards } from "@/contexts/ProjectCardsContext";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { useSchedule } from "@/contexts/ScheduleContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
