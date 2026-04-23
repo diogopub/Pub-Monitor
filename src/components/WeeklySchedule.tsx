@@ -318,6 +318,8 @@ function TaskBar({
   updateEntry,
   viewMode,
   onDescriptionChange,
+  activeInteractionId,
+  toggleInteraction,
 }: {
   entry: ScheduleEntry;
   act: ActivityType;
@@ -685,6 +687,8 @@ function ScheduleCell({
   syncingIds,
   addToSyncing,
   removeFromSyncing,
+  activeInteractionId,
+  toggleInteraction,
 }: {
   memberId: string;
   date: string;
