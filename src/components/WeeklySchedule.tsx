@@ -325,7 +325,11 @@ function TaskBar({
   updateEntry: (id: string, updates: Partial<ScheduleEntry>) => Promise<void> | void;
   viewMode?: "week" | "fortnight" | "month";
   onDescriptionChange?: (entryId: string, description: string) => void;
+  activeInteractionId: string | null;
+  toggleInteraction: (id: string) => void;
 }) {
+  const interactionId = `task-${entry.id}`;
+  const showDescEditor = activeInteractionId === interactionId;
   const isMonth = viewMode === "month";
   // Live preview during resize: { startSlot, durationSlots } | null
   const [preview, setPreview] = useState<{ startSlot: number; durationSlots: number } | null>(null);
@@ -333,7 +337,6 @@ function TaskBar({
   const barRef = useRef<HTMLDivElement>(null);
 
   // ── Description state ─────────────────────────────────────────
-  const [showDescEditor, setShowDescEditor] = useState(false);
   const [descText, setDescText] = useState(entry.description || "");
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -356,7 +359,7 @@ function TaskBar({
     if (trimmed !== (entry.description || "")) {
       onDescriptionChange?.(entry.id, trimmed);
     }
-    setShowDescEditor(false);
+    toggleInteraction(interactionId); // Closes it
   };
 
   // ── Tooltip hover handlers ────────────────────────────────────
@@ -529,7 +532,7 @@ function TaskBar({
       onClick={(e) => {
         e.stopPropagation();
         if (!isMonth && !isResizingRef.current) {
-          setShowDescEditor(prev => !prev);
+          toggleInteraction(interactionId);
           setShowTooltip(false);
         }
       }}
@@ -588,7 +591,7 @@ function TaskBar({
                 }
                 if (e.key === "Escape") {
                   setDescText(entry.description || "");
-                  setShowDescEditor(false);
+                  toggleInteraction(interactionId);
                 }
               }}
               draggable={false}
@@ -604,7 +607,7 @@ function TaskBar({
                 onClick={(e) => {
                   e.stopPropagation();
                   setDescText(entry.description || "");
-                  setShowDescEditor(false);
+                  toggleInteraction(interactionId);
                 }}
                 className="px-2 py-1 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
               >
@@ -687,13 +690,16 @@ function ScheduleCell({
   syncingIds: Set<string>;
   addToSyncing: (id: string) => void;
   removeFromSyncing: (id: string) => void;
+  activeInteractionId: string | null;
+  toggleInteraction: (id: string) => void;
 }) {
+  const interactionId = `cell-${memberId}-${date}`;
+  const open = activeInteractionId === interactionId;
   const isMonth = viewMode === "month";
   const { state: scheduleState, getEntriesForCell, addEntry, removeEntry, updateEntry } = useSchedule();
   const { state: cardsState, updateCard } = useProjectCards();
   const { state: networkState } = useNetwork();
   const { googleAccessToken, clearGoogleToken, loginWithGoogle, ensureGoogleToken } = useAuth();
-  const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"activity" | "project">("activity");
   const [selectedActivity, setSelectedActivity] = useState<ActivityType | null>(null);
 
@@ -1122,7 +1128,7 @@ function ScheduleCell({
   };
 
   const handleClose = () => {
-    setOpen(false);
+    toggleInteraction(interactionId); // Closes it
     setStep("activity");
     setSelectedActivity(null);
   };
@@ -1130,7 +1136,7 @@ function ScheduleCell({
   return (
     <Popover open={!isMonth && open} onOpenChange={(o) => {
       if (isMonth) return;
-      setOpen(o);
+      if (!o && open) toggleInteraction(interactionId);
       if (!o) {
         setStep("activity");
         setSelectedActivity(null);
@@ -1142,6 +1148,10 @@ function ScheduleCell({
           style={{ height: `${dynamicHeight}px` }}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
+          onClick={(e) => {
+            if (isMonth) return;
+            toggleInteraction(interactionId);
+          }}
           data-sticky-anchor="agenda"
           data-date={date}
           data-ref={memberId}
@@ -1171,6 +1181,8 @@ function ScheduleCell({
                 updateEntry={handleUpdateEntry}
                 viewMode={viewMode}
                 onDescriptionChange={handleDescriptionChange}
+                activeInteractionId={activeInteractionId}
+                toggleInteraction={toggleInteraction}
               />
             );
           })}
@@ -1593,6 +1605,11 @@ export default function WeeklySchedule({
     return next;
   });
 
+  const [activeInteractionId, setActiveInteractionId] = useState<string | null>(null);
+  const toggleInteraction = useCallback((id: string) => {
+    setActiveInteractionId(prev => (prev ? null : id));
+  }, []);
+
   // ─── Force Sync ALL visible members ───────────────────────────────
   const [isForceSyncing, setIsForceSyncing] = useState(false);
 
@@ -1996,6 +2013,8 @@ export default function WeeklySchedule({
                           syncingIds={syncingIds}
                           addToSyncing={addToSyncing}
                           removeFromSyncing={removeFromSyncing}
+                          activeInteractionId={activeInteractionId}
+                          toggleInteraction={toggleInteraction}
                         />
                       </td>
                     );
