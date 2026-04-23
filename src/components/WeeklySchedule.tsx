@@ -511,149 +511,154 @@ function TaskBar({
   const hasDescription = !!entry.description;
 
   return (
-    <div
-      ref={barRef}
-      draggable={!isResizingRef.current && !showDescEditor}
-      onDragStart={handleDragStart}
-      className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm select-none
-        ${isResizing ? "z-50 ring-2 ring-primary/70 opacity-90" : (showDescEditor || showTooltip) ? "z-[60]" : "z-10"}
-        ${act.id === "entrega-pub" ? "border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)]" : ""}
-        ${!isResizing ? "hover:-translate-y-[1px] transition-transform cursor-grab active:cursor-grabbing" : "cursor-col-resize"}`}
-      style={{
-        backgroundColor: act.color,
-        color: act.textColor,
-        top: `${rowTop}px`,
-        left: `${leftPct}%`,
-        width: `${widthPct}%`,
-        height: `${barHeight}px`,
-        opacity: isMonth ? 0.9 : 1,
-      }}
-      title={isMonth ? label : undefined}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!isMonth && !isResizingRef.current) {
-          toggleInteraction(interactionId);
-          setShowTooltip(false);
-        }
-      }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* ── Floating Time Labels (Resizing) ─── */}
-      {isResizing && (
-        <>
-          <div className="absolute -top-7 left-0 bg-black/80 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-lg border border-white/20 z-[9999] whitespace-nowrap -translate-x-1/2">
-            {slotToTime(displayStart)}
-          </div>
-          <div className="absolute -top-7 right-0 bg-black/80 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-lg border border-white/20 z-[9999] whitespace-nowrap translate-x-1/2">
-            {slotToTime(displayStart + displayDur)}
-          </div>
-        </>
-      )}
-
-      {/* ── Description Tooltip (hover) ─── */}
-      {showTooltip && hasDescription && !showDescEditor && !isMonth && (
+    <Popover open={showDescEditor} onOpenChange={(o) => { if (!o && showDescEditor) toggleInteraction(interactionId); }}>
+      <PopoverAnchor asChild>
         <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-[9999] pointer-events-none"
-          style={{ minWidth: "120px", maxWidth: "220px" }}
+          ref={barRef}
+          draggable={!isResizingRef.current && !showDescEditor}
+          onDragStart={handleDragStart}
+          className={`absolute flex items-center rounded text-[10px] font-semibold leading-tight group/bar shadow-sm select-none
+            ${isResizing ? "z-50 ring-2 ring-primary/70 opacity-90" : (showDescEditor || showTooltip) ? "z-[60]" : "z-10"}
+            ${act.id === "entrega-pub" ? "border border-yellow-400/60 shadow-[0_0_8px_rgba(250,204,21,0.3)]" : ""}
+            ${!isResizing ? "hover:-translate-y-[1px] transition-transform cursor-grab active:cursor-grabbing" : "cursor-col-resize"}`}
+          style={{
+            backgroundColor: act.color,
+            color: act.textColor,
+            top: `${rowTop}px`,
+            left: `${leftPct}%`,
+            width: `${widthPct}%`,
+            height: `${barHeight}px`,
+            opacity: isMonth ? 0.9 : 1,
+          }}
+          title={isMonth ? label : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isMonth && !isResizingRef.current) {
+              toggleInteraction(interactionId);
+              setShowTooltip(false);
+            }
+          }}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
-          <div className="bg-gray-900/95 text-white text-[10px] leading-snug px-2.5 py-1.5 rounded-md shadow-xl border border-white/10 whitespace-pre-wrap break-words">
-            {entry.description}
-          </div>
-          <div className="w-2 h-2 bg-gray-900/95 rotate-45 mx-auto -mt-1 border-r border-b border-white/10" />
-        </div>
-      )}
-
-      {/* ── Description Editor (click) ─── */}
-      {showDescEditor && !isMonth && (
-        <div
-          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-[9999]"
-          style={{ width: "200px" }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <div className="bg-popover border border-border rounded-lg shadow-2xl p-2 space-y-1.5">
-            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
-              Descrição
-            </p>
-            <textarea
-              ref={descInputRef}
-              value={descText}
-              onChange={(e) => setDescText(e.target.value)}
-              placeholder="Adicione uma descrição..."
-              rows={3}
-              className="w-full bg-secondary/50 rounded px-2 py-1.5 text-[11px] text-foreground outline-none focus:ring-1 focus:ring-primary/50 border border-transparent focus:border-primary/30 resize-none leading-tight placeholder:text-muted-foreground/60"
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleDescSave();
-                }
-                if (e.key === "Escape") {
-                  setDescText(entry.description || "");
-                  toggleInteraction(interactionId);
-                }
-              }}
-              draggable={false}
-            />
-            <div className="flex gap-1">
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDescSave(); }}
-                className="flex-1 text-center py-1 rounded text-[10px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                Salvar
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDescText(entry.description || "");
-                  toggleInteraction(interactionId);
-                }}
-                className="px-2 py-1 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── LEFT resize handle ─── */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-2.5 flex items-center justify-center cursor-ew-resize hover:bg-black/20 rounded-l border-r border-white/20 z-20 opacity-0 group-hover/bar:opacity-100 transition-opacity"
-        onMouseDown={startLeftResize}
-      >
-        <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
-      </div>
-
-      {/* ── Label + Description indicator ─── */}
-      {!isMonth && (
-        <div className="flex-1 flex items-center justify-center gap-0.5 truncate px-3 pointer-events-none select-none">
-          <span className="truncate">{label}</span>
-          {hasDescription && (
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-50 shrink-0 ml-0.5" title="Possui descrição" />
+          {/* ── Floating Time Labels (Resizing) ─── */}
+          {isResizing && (
+            <>
+              <div className="absolute -top-7 left-0 bg-black/80 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-lg border border-white/20 z-[9999] whitespace-nowrap -translate-x-1/2">
+                {slotToTime(displayStart)}
+              </div>
+              <div className="absolute -top-7 right-0 bg-black/80 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-lg border border-white/20 z-[9999] whitespace-nowrap translate-x-1/2">
+                {slotToTime(displayStart + displayDur)}
+              </div>
+            </>
           )}
-        </div>
-      )}
 
-      {/* ── RIGHT controls (delete + resize) ─── */}
-      {!isMonth && (
-        <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity z-20">
-          <button
-            onClick={(e) => { e.stopPropagation(); removeEntry(entry.id); }}
-            className="hover:bg-black/20 text-white rounded p-0.5 mr-0.5"
-          >
-            <X className="w-2.5 h-2.5" />
-          </button>
+          {/* ── Description Tooltip (hover) ─── */}
+          {showTooltip && hasDescription && !showDescEditor && !isMonth && (
+            <div
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-[9999] pointer-events-none"
+              style={{ minWidth: "120px", maxWidth: "220px" }}
+            >
+              <div className="bg-gray-900/95 text-white text-[10px] leading-snug px-2.5 py-1.5 rounded-md shadow-xl border border-white/10 whitespace-pre-wrap break-words">
+                {entry.description}
+              </div>
+              <div className="w-2 h-2 bg-gray-900/95 rotate-45 mx-auto -mt-1 border-r border-b border-white/10" />
+            </div>
+          )}
+
+          {/* ── LEFT resize handle ─── */}
           <div
-            className="w-2.5 h-full cursor-ew-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
-            onMouseDown={startRightResize}
+            className="absolute left-0 top-0 bottom-0 w-2.5 flex items-center justify-center cursor-ew-resize hover:bg-black/20 rounded-l border-r border-white/20 z-20 opacity-0 group-hover/bar:opacity-100 transition-opacity"
+            onMouseDown={startLeftResize}
           >
             <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
           </div>
+
+          {/* ── Label + Description indicator ─── */}
+          {!isMonth && (
+            <div className="flex-1 flex items-center justify-center gap-0.5 truncate px-3 pointer-events-none select-none">
+              <span className="truncate">{label}</span>
+              {hasDescription && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-current opacity-50 shrink-0 ml-0.5" title="Possui descrição" />
+              )}
+            </div>
+          )}
+
+          {/* ── RIGHT controls (delete + resize) ─── */}
+          {!isMonth && (
+            <div className="absolute right-0 top-0 bottom-0 flex items-center opacity-0 group-hover/bar:opacity-100 transition-opacity z-20">
+              <button
+                onClick={(e) => { e.stopPropagation(); removeEntry(entry.id); }}
+                className="hover:bg-black/20 text-white rounded p-0.5 mr-0.5"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+              <div
+                className="w-2.5 h-full cursor-ew-resize flex items-center justify-center hover:bg-black/20 rounded-r border-l border-white/20"
+                onMouseDown={startRightResize}
+              >
+                <div className="w-[2px] h-2.5 bg-current opacity-50 rounded-full pointer-events-none" />
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+      </PopoverAnchor>
+
+      <PopoverContent 
+        side="top" 
+        align="center" 
+        className="p-0 w-[200px] border-none bg-transparent shadow-none" 
+        sideOffset={8}
+      >
+        <div
+          className="bg-popover border border-border rounded-lg shadow-2xl p-2 space-y-1.5"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">
+            Descrição
+          </p>
+          <textarea
+            ref={descInputRef}
+            value={descText}
+            onChange={(e) => setDescText(e.target.value)}
+            placeholder="Adicione uma descrição..."
+            rows={3}
+            className="w-full bg-secondary/50 rounded px-2 py-1.5 text-[11px] text-foreground outline-none focus:ring-1 focus:ring-primary/50 border border-transparent focus:border-primary/30 resize-none leading-tight placeholder:text-muted-foreground/60"
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleDescSave();
+              }
+              if (e.key === "Escape") {
+                setDescText(entry.description || "");
+                toggleInteraction(interactionId);
+              }
+            }}
+            draggable={false}
+          />
+          <div className="flex gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDescSave(); }}
+              className="flex-1 text-center py-1 rounded text-[10px] font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Salvar
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setDescText(entry.description || "");
+                toggleInteraction(interactionId);
+              }}
+              className="px-2 py-1 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
