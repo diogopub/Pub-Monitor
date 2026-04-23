@@ -21,6 +21,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverAnchor,
 } from "@/components/ui/popover";
 import {
   Select,
@@ -828,7 +829,7 @@ function ScheduleCell({
       return; // Aborta criação local
     }
 
-    setOpen(false);
+    toggleInteraction(interactionId);
     setStep("activity");
     setSelectedActivity(null);
 
