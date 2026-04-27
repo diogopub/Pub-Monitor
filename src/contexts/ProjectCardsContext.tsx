@@ -96,8 +96,7 @@ interface ProjectCardsContextType {
 
 const STORAGE_KEY = "pub-project-cards-v2";
 const CARDS_COLLECTION = "project_cards";
-const MAIL_COLLECTION = "mail";
-
+// Email notifications are now handled via Vercel + Resend
 const NOTIFICATION_EMAILS = [
   "diogo@thepublic.house",
   "cris@thepublic.house",
@@ -159,18 +158,20 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
       : `O projeto "${projectName}" foi concluído no Monitor.`;
 
     try {
-      await addDoc(collection(db, MAIL_COLLECTION), {
-        to: NOTIFICATION_EMAILS,
-        message: {
-          subject: subject,
-          text: body,
-          html: `<p>${body}</p>`
-        }
+      await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: NOTIFICATION_EMAILS,
+          subject,
+          html: `<p>${body}</p>`,
+        }),
       });
+      console.log(`[Email] Notificação enviada: ${subject}`);
     } catch (err) {
-      console.error("Failed to trigger email notification:", err);
+      console.error("Erro ao enviar notificação por e-mail:", err);
     }
-  }, [canWrite]);
+  }, []);
 
   // ☁️ SYNC FROM CLOUD
   useEffect(() => {
