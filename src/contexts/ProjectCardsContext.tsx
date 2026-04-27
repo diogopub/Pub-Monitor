@@ -9,7 +9,8 @@ import {
   deleteDoc, 
   updateDoc, 
   writeBatch, 
-  getDocs 
+  getDocs,
+  addDoc 
 } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
@@ -95,6 +96,14 @@ interface ProjectCardsContextType {
 
 const STORAGE_KEY = "pub-project-cards-v2";
 const CARDS_COLLECTION = "project_cards";
+const MAIL_COLLECTION = "mail";
+
+const NOTIFICATION_EMAILS = [
+  "diogo@thepublic.house",
+  "cris@thepublic.house",
+  "talita@thepublic.house",
+  "vinicius@thepublic.house"
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -140,6 +149,29 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
   const { currentUserRole } = usePermissions();
   const canWrite = currentUserRole === "admin" || currentUserRole === "editor";
 
+  // 📧 Email Notifications
+  const sendEmailNotification = useCallback(async (type: "new" | "concluded", projectName: string) => {
+    if (!canWrite) return;
+    
+    const subject = type === "new" ? "[NOVO PROJETO]" : "[PROJETO CONCLUÍDO]";
+    const body = type === "new" 
+      ? `O projeto "${projectName}" foi criado no Monitor.`
+      : `O projeto "${projectName}" foi concluído no Monitor.`;
+
+    try {
+      await addDoc(collection(db, MAIL_COLLECTION), {
+        to: NOTIFICATION_EMAILS,
+        message: {
+          subject: subject,
+          text: body,
+          html: `<p>${body}</p>`
+        }
+      });
+    } catch (err) {
+      console.error("Failed to trigger email notification:", err);
+    }
+  }, [canWrite]);
+
   // ☁️ SYNC FROM CLOUD
   useEffect(() => {
     if (!user) return;
@@ -184,9 +216,13 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
     });
 
     if (canWrite) {
-      setDoc(doc(db, CARDS_COLLECTION, newCard.id), sanitizeForFirestore(newCard)).catch(console.error);
+      setDoc(doc(db, CARDS_COLLECTION, newCard.id), sanitizeForFirestore(newCard))
+        .then(() => {
+          sendEmailNotification("new", newCard.name);
+        })
+        .catch(console.error);
     }
-  }, [canWrite]);
+  }, [canWrite, sendEmailNotification]);
 
   const updateCard = useCallback((id: string, updates: Partial<ProjectCardData>) => {
     setStateInternal(prev => {
@@ -196,9 +232,17 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
     });
 
     if (canWrite) {
+      // Se estamos concluindo o projeto (active passando de true/undefined para false)
+      if (updates.active === false) {
+        const card = state.cards.find(c => c.id === id);
+        if (card && card.active !== false) {
+          sendEmailNotification("concluded", card.name);
+        }
+      }
+
       updateDoc(doc(db, CARDS_COLLECTION, id), sanitizeForFirestore(updates)).catch(console.error);
     }
-  }, [canWrite]);
+  }, [canWrite, state.cards, sendEmailNotification]);
 
   const removeCard = useCallback((id: string) => {
     setStateInternal(prev => {
