@@ -15,8 +15,12 @@ export function LoginMenu() {
   const { currentUserRole, loading: permsLoading, requestAccess } = usePermissions();
 
   const loading = authLoading || permsLoading;
-
   if (loading) return null;
+  
+  // No embed da timeline, permitimos visualização pública sem o bloqueio do LoginMenu
+  const isEmbed = window.location.pathname.startsWith("/embed/");
+  if (isEmbed) return null;
+
   if (!user) {
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center p-4">

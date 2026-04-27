@@ -174,7 +174,9 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
 
   // ☁️ SYNC FROM CLOUD
   useEffect(() => {
-    if (!user) return;
+    const isEmbed = window.location.pathname.startsWith("/embed/");
+    if (!user && !isEmbed) return;
+
     const cardsCol = collection(db, CARDS_COLLECTION);
     return onSnapshot(cardsCol, (snapshot) => {
       const cards: ProjectCardData[] = [];
