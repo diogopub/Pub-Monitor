@@ -34,6 +34,7 @@ export interface Assignment {
 export interface AppSettings {
   googleAppsScriptUrl?: string;
   autoBackupEnabled: boolean;
+  notificationEmails?: string[];
 }
 
 export interface NetworkState {

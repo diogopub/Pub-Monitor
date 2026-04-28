@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "./AuthContext";
 import { usePermissions } from "./PermissionsContext";
+import { useNetwork } from "./NetworkContext";
 import { sanitizeForFirestore } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -96,8 +97,8 @@ interface ProjectCardsContextType {
 
 const STORAGE_KEY = "pub-project-cards-v2";
 const CARDS_COLLECTION = "project_cards";
-// Email notifications are now handled via Vercel + Resend
-const NOTIFICATION_EMAILS = [
+// Email notifications default list (overridden by settings)
+const DEFAULT_NOTIFICATION_EMAILS = [
   "diogo@thepublic.house",
   "cris@thepublic.house",
   "talita@thepublic.house",
@@ -146,6 +147,7 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
   const [state, setStateInternal] = useState<ProjectCardsState>(loadLocalState);
   const { user } = useAuth();
   const { currentUserRole } = usePermissions();
+  const { state: networkState } = useNetwork();
   const canWrite = currentUserRole === "admin" || currentUserRole === "editor";
 
   // 📧 Email Notifications
@@ -157,21 +159,31 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
       ? `O projeto "${projectName}" foi criado no Monitor.`
       : `O projeto "${projectName}" foi concluído no Monitor.`;
 
+    const customEmails = networkState?.settings?.notificationEmails;
+    const emailList = customEmails && customEmails.length > 0 
+      ? customEmails 
+      : DEFAULT_NOTIFICATION_EMAILS;
+
     try {
-      await fetch("/api/send-email", {
+      await fetch("https://api.emailjs.com/api/v1.0/email/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: NOTIFICATION_EMAILS,
-          subject,
-          html: `<p>${body}</p>`,
+          service_id: "service_cz37i6q",
+          template_id: "template_zbcnypp",
+          user_id: "F8QPrzXbV-5orJhbI",
+          template_params: {
+            to_email: emailList.join(","),
+            subject,
+            html: `<p>${body}</p>`,
+          },
         }),
       });
       console.log(`[Email] Notificação enviada: ${subject}`);
     } catch (err) {
       console.error("Erro ao enviar notificação por e-mail:", err);
     }
-  }, []);
+  }, [canWrite, networkState?.settings?.notificationEmails]);
 
   // ☁️ SYNC FROM CLOUD
   useEffect(() => {

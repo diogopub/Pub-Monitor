@@ -124,8 +124,17 @@ function ProjectCardsSection({ onOpenDialog }: { onOpenDialog: () => void }) {
 
 function PermissionsSettingsSection() {
   const { authorizedUsers, pendingUsers, addAuthorizedUser, removeAuthorizedUser, removePendingRequest, currentUserRole } = usePermissions();
+  const { state: networkState, updateSettings } = useNetwork();
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<UserRole>("editor");
+  
+  const [newNotificationEmail, setNewNotificationEmail] = useState("");
+  const notificationEmails = networkState.settings.notificationEmails || [
+    "diogo@thepublic.house",
+    "cris@thepublic.house",
+    "talita@thepublic.house",
+    "vinicius@thepublic.house"
+  ];
   
   // Pending approvals state overrides per user
   const [pendingRoles, setPendingRoles] = useState<Record<string, UserRole>>({});
@@ -160,6 +169,26 @@ function PermissionsSettingsSection() {
   const handleRoleChange = async (email: string, role: UserRole) => {
     await addAuthorizedUser(email, role);
     toast.success("Permissão atualizada.");
+  };
+
+  const handleAddNotificationEmail = () => {
+    if (!newNotificationEmail.includes("@")) {
+      toast.error("E-mail inválido");
+      return;
+    }
+    const cleanEmail = newNotificationEmail.trim().toLowerCase();
+    if (notificationEmails.includes(cleanEmail)) {
+      toast.error("E-mail já está na lista");
+      return;
+    }
+    updateSettings({ notificationEmails: [...notificationEmails, cleanEmail] });
+    setNewNotificationEmail("");
+    toast.success("E-mail adicionado às notificações");
+  };
+
+  const handleRemoveNotificationEmail = (email: string) => {
+    updateSettings({ notificationEmails: notificationEmails.filter(e => e !== email) });
+    toast.success("E-mail removido das notificações");
   };
 
   return (
@@ -251,10 +280,53 @@ function PermissionsSettingsSection() {
           </div>
         </div>
 
-        {/* Direita: Aprovação Pendente */}
-        <div className="w-full xl:w-[450px] shrink-0 space-y-4">
-          <div className="flex items-center gap-2">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Aprovação Pendente</h3>
+        {/* Direita: Notificações e Aprovação Pendente */}
+        <div className="w-full xl:w-[450px] shrink-0 space-y-6">
+          
+          {/* Caixa de Notificações */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Notificações (E-mail)</h3>
+            </div>
+            
+            <div className="bg-card/40 backdrop-blur-sm border border-border rounded-xl p-6 space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Estes e-mails receberão avisos quando novos projetos forem criados ou concluídos.
+              </p>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="novo@thepublic.house" 
+                  className="bg-black/20 text-xs h-8"
+                  value={newNotificationEmail}
+                  onChange={(e) => setNewNotificationEmail(e.target.value)}
+                />
+                <Button size="sm" className="h-8 shrink-0" onClick={handleAddNotificationEmail}>
+                  Adicionar
+                </Button>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {notificationEmails.map(email => (
+                  <div key={email} className="flex items-center justify-between bg-black/20 px-3 py-2 rounded-md border border-border/50">
+                    <span className="text-xs font-medium">{email}</span>
+                    <button 
+                      className="text-muted-foreground hover:text-red-500 transition-colors"
+                      onClick={() => handleRemoveNotificationEmail(email)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Caixa de Aprovação Pendente */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Aprovação Pendente</h3>
             {pendingUsers.length > 0 && (
               <span className="bg-red-500 text-white px-2 py-0.5 rounded-full text-[10px] font-bold shadow-[0_0_8px_rgba(239,68,68,0.5)] animate-pulse">
                 {pendingUsers.length}
