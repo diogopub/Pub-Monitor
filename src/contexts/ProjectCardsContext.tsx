@@ -173,7 +173,7 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
           template_id: "template_zbcnypp",
           user_id: "F8QPrzXbV-5orJhbI",
           template_params: {
-            to_email: emailList.join(","),
+            to_email: emailList.join(", "),
             subject,
             html: `<p>${body}</p>`,
           },
