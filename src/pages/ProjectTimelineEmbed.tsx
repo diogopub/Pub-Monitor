@@ -17,13 +17,16 @@ function formatDateShort(d: Date): string {
 const DAYS_IN_VIEW = 14;
 
 export default function ProjectTimelineEmbed({ params }: { params: { projectId: string } }) {
-  const { state } = useProjectCards();
+  const { state, hydrated } = useProjectCards();
   const { projectId } = params;
 
   const card = state.cards.find(c => c.id === projectId);
 
   // Navigation state exactly like ProjectTimelines
   const [baseDate, setBaseDate] = useState(() => addDays(new Date(), -3));
+  // Same drag logic as ProjectTimelines
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
 
   const daysArray = useMemo(() => {
     return Array.from({ length: DAYS_IN_VIEW }, (_, i) => addDays(baseDate, i));
@@ -34,6 +37,14 @@ export default function ProjectTimelineEmbed({ params }: { params: { projectId: 
   // No-op for updateCard since it's readOnly
   const handleUpdateCard = () => {};
 
+  if (!hydrated) {
+    return (
+      <div className="w-screen h-screen bg-[#11131a] flex items-center justify-center text-white/50 text-sm font-mono">
+        Carregando...
+      </div>
+    );
+  }
+
   if (!card) {
     return (
       <div className="w-screen h-screen bg-[#11131a] flex items-center justify-center text-white/50 text-sm font-mono">
@@ -41,10 +52,6 @@ export default function ProjectTimelineEmbed({ params }: { params: { projectId: 
       </div>
     );
   }
-
-  // Same drag logic as ProjectTimelines
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest(".popover-content")) return;

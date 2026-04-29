@@ -18,7 +18,7 @@ export function LoginMenu() {
   if (loading) return null;
   
   // No embed da timeline, permitimos visualização pública sem o bloqueio do LoginMenu
-  const isEmbed = window.location.pathname.startsWith("/embed/");
+  const isEmbed = window.location.pathname.includes("/embed/");
   if (isEmbed) return null;
 
   if (!user) {

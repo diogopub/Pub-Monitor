@@ -93,6 +93,7 @@ interface ProjectCardsContextType {
   removeFeedEntry: (cardId: string, feedId: string) => void;
   togglePinStatus: (cardId: string, pinId: string, labelIndex: number, userName: string) => void;
   setState: (state: ProjectCardsState) => Promise<void>;
+  hydrated: boolean;
 }
 
 const STORAGE_KEY = "pub-project-cards-v2";
@@ -145,6 +146,7 @@ const ProjectCardsContext = createContext<ProjectCardsContextType | null>(null);
 
 export function ProjectCardsProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateInternal] = useState<ProjectCardsState>(loadLocalState);
+  const [hydrated, setHydrated] = useState(false);
   const { user } = useAuth();
   const { currentUserRole } = usePermissions();
   const { state: networkState } = useNetwork();
@@ -187,31 +189,55 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
 
   // ☁️ SYNC FROM CLOUD
   useEffect(() => {
-    const isEmbed = window.location.pathname.startsWith("/embed/");
+    const isEmbed = window.location.pathname.includes("/embed/");
     if (!user && !isEmbed) return;
+
+    // Se for embed e estiver sem login, tentamos buscar apenas o projeto específico do URL.
+    // Isso ajuda a contornar restrições de leitura de coleção inteira no Firestore para usuários anônimos.
+    const embedMatch = window.location.pathname.match(/\/embed\/timeline\/([^/]+)/);
+    const embedProjectId = embedMatch ? embedMatch[1] : null;
+
+    const mapCard = (id: string, data: any): ProjectCardData => ({
+      ...data,
+      id: (typeof data.id === 'string' && data.id.trim()) ? data.id : id,
+      team: migrateTeam(data.team),
+      documents: Array.isArray(data.documents) ? data.documents : [],
+      feed: Array.isArray(data.feed) ? data.feed : [],
+      timelinePins: Array.isArray(data.timelinePins) ? data.timelinePins.map((p: any) => ({
+        ...p,
+        labels: Array.isArray(p.labels) ? p.labels : (p.label ? [p.label] : ["ENTRADA"]),
+      })) : undefined,
+    });
+
+    if (!user && isEmbed && embedProjectId) {
+      const docRef = doc(db, CARDS_COLLECTION, embedProjectId);
+      return onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const card = mapCard(docSnap.id, docSnap.data());
+          setStateInternal(prev => ({ ...prev, cards: [card] }));
+        }
+        setHydrated(true);
+      }, (err) => {
+        console.error("ProjectCardsProvider: Single doc sync error:", err);
+        setHydrated(true);
+      });
+    }
 
     const cardsCol = collection(db, CARDS_COLLECTION);
     return onSnapshot(cardsCol, (snapshot) => {
       const cards: ProjectCardData[] = [];
       snapshot.forEach(d => {
-        const c = d.data() as any;
-        cards.push({
-          ...c,
-          id: (typeof c.id === 'string' && c.id.trim()) ? c.id : d.id,
-          team: migrateTeam(c.team),
-          documents: Array.isArray(c.documents) ? c.documents : [],
-          feed: Array.isArray(c.feed) ? c.feed : [],
-          timelinePins: Array.isArray(c.timelinePins) ? c.timelinePins.map((p: any) => ({
-            ...p,
-            labels: Array.isArray(p.labels) ? p.labels : (p.label ? [p.label] : ["ENTRADA"]),
-          })) : undefined,
-        });
+        cards.push(mapCard(d.id, d.data()));
       });
       setStateInternal(prev => {
         const next = { ...prev, cards };
         saveLocalState(next);
         return next;
       });
+      setHydrated(true);
+    }, (err) => {
+      console.error("ProjectCardsProvider: Sync error:", err);
+      setHydrated(true); // Stop loading even on error
     });
   }, [user]);
 
@@ -540,6 +566,7 @@ export function ProjectCardsProvider({ children }: { children: React.ReactNode }
       reorderDocument, addTeamMember, updateTeamMember, removeTeamMember, addFeedEntry, removeFeedEntry,
       togglePinStatus,
       setState: setStateBulk,
+      hydrated,
     }}>
       {children}
     </ProjectCardsContext.Provider>

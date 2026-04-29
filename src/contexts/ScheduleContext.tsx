@@ -166,7 +166,8 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
 
   // ☁️ Sync entries
   useEffect(() => {
-    if (!user) return;
+    const isEmbed = window.location.pathname.includes("/embed/");
+    if (!user && !isEmbed) return;
     const entriesCol = collection(db, ENTRIES_COLLECTION);
     return onSnapshot(entriesCol, (snapshot) => {
       const newEntries: ScheduleEntry[] = [];
@@ -193,7 +194,8 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
 
   // ☁️ Sync meta
   useEffect(() => {
-    if (!user) return;
+    const isEmbed = window.location.pathname.includes("/embed/");
+    if (!user && !isEmbed) return;
     const metaRef = doc(db, "data", META_DOC);
     return onSnapshot(metaRef, (snapshot) => {
       if (snapshot.exists()) {

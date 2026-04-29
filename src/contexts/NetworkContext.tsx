@@ -150,7 +150,8 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
 
   // ☁️ SYNC FROM CLOUD — real-time listener, merges into local state
   useEffect(() => {
-    if (!user) return;
+    const isEmbed = window.location.pathname.includes("/embed/");
+    if (!user && !isEmbed) return;
 
     const docRef = doc(db, "data", "network");
     const unsub = onSnapshot(docRef, (snapshot) => {
